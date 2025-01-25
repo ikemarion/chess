@@ -68,6 +68,8 @@ public class ChessPiece {
             return KnightMovements.getPossibilities(myPosition, board);
         }else if(type == PieceType.KING){
             return KingMovements.getPossibilities(myPosition, board);
+        }else if(type == PieceType.PAWN){
+            return PawnMovements.getPossibilities(myPosition, board);
         }
         return new HashSet<ChessMove>();
     }
