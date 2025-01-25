@@ -8,27 +8,27 @@ import chess.ChessPosition;
 import java.util.HashSet;
 
 public interface MovementCalculator {
-    static void getMovement(ChessBoard board, ChessPosition startposition, ChessPiece piece, int[][] direction, HashSet<ChessMove> validMoves, boolean something){
+    static void getMovement(ChessBoard board, ChessPosition startPosition, ChessPiece piece, int[][] direction, HashSet<ChessMove> validMoves, boolean repeatable){
         for (int[] i : direction) {
 
-            int newrow = startposition.getRow();
-            int newcol = startposition.getColumn();
+            int newrow = startPosition.getRow();
+            int newcol = startPosition.getColumn();
 
             while(true) {
                 newrow = newrow + i[0];
                 newcol = newcol + i[1];
-                ChessPosition endpostion = new ChessPosition(newrow, newcol);
-                if (boundaryCheck(endpostion)) {
-                    if (board.getPiece(endpostion) == null) {
-                        validMoves.add(new ChessMove(startposition, endpostion, null));
-                    } else if (piece.getTeamColor() != board.getPiece(endpostion).getTeamColor()) {
-                        validMoves.add(new ChessMove(startposition, endpostion, null));
+                ChessPosition endPostion = new ChessPosition(newrow, newcol);
+                if (boundaryCheck(endPostion)) {
+                    if (board.getPiece(endPostion) == null) {
+                        validMoves.add(new ChessMove(startPosition, endPostion, null));
+                    } else if (piece.getTeamColor() != board.getPiece(endPostion).getTeamColor()) {
+                        validMoves.add(new ChessMove(startPosition, endPostion, null));
                         break;
                     }
                     else{break;}
                 }
                 else{break;}
-                if (!something){
+                if (!repeatable){
                     break;
                 }
             }

@@ -1,9 +1,11 @@
 package chess;
 
-import chess.pieceMovement.BishopMovements;
+import chess.pieceMovement.*;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Objects;
 
 /**
  * Represents a single chess piece
@@ -58,18 +60,30 @@ public class ChessPiece {
 
         if(type == PieceType.BISHOP){
             return BishopMovements.getPossibilities(myPosition,board);
+        }else if(type == PieceType.ROOK){
+            return RookMovements.getPossibilities(myPosition, board);
+        }else if(type == PieceType.QUEEN){
+            return QueenMovements.getPossibilities(myPosition, board);
+        }else if(type == PieceType.KNIGHT){
+            return KnightMovements.getPossibilities(myPosition, board);
+        }else if(type == PieceType.KING){
+            return KingMovements.getPossibilities(myPosition, board);
         }
-        return new ArrayList<>();
+        return new HashSet<ChessMove>();
     }
 
     @Override
-    public boolean equals(Object obj) {
-        return super.equals(obj);
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        ChessPiece that = (ChessPiece) o;
+        return shade == that.shade && type == that.type;
     }
 
     @Override
     public int hashCode() {
-        return super.hashCode();
+        return Objects.hash(shade, type);
     }
 
     @Override
