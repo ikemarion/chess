@@ -60,17 +60,17 @@ public class ChessGame {
         if(piece == null){
             return null;
         }
+        HashSet<ChessMove> validMoves = new HashSet<>();
+        HashSet<ChessMove> allMoves = new HashSet<>(piece.pieceMoves(board, startPosition));
 
-        HashSet<ChessMove> validMoves = new HashSet<>(board.getPiece(startPosition).pieceMoves(board, startPosition));
-
-        for(ChessMove move : validMoves){
+        for(ChessMove move : allMoves){
             ChessPiece placeholder = board.getPiece(startPosition);
             ChessPiece placeholder2 = board.getPiece(move.getEndPosition());
 
             board.addPiece(move.getEndPosition(), placeholder);
             board.addPiece(move.getStartPosition(), null);
-            if(isInCheck(placeholder.getTeamColor())){
-                validMoves.remove(move);
+            if(!isInCheck(placeholder.getTeamColor())){
+                validMoves.add(move);
             }
             board.addPiece(move.getStartPosition(), placeholder);
             board.addPiece(move.getEndPosition(), placeholder2);
@@ -154,7 +154,7 @@ public class ChessGame {
                 }
                 Collection<ChessMove> test = validMoves(new ChessPosition(x, y));
                 if(!test.isEmpty()){
-                            return false;
+                    return false;
                 }
             }
         }
@@ -172,7 +172,6 @@ public class ChessGame {
                 }
             }
         }
-        king = new ChessPosition(1,1);
         return king;
     }
 
