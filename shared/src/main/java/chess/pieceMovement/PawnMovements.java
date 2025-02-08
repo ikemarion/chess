@@ -79,7 +79,6 @@ public class PawnMovements implements MovementCalculator{
             }
         }
 
-
         return output;
     }
 }
