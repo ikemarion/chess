@@ -1,9 +1,6 @@
 package chess;
 
 import chess.pieceMovement.BishopMovements;
-import chess.pieceMovement.KingMovements;
-import chess.pieceMovement.KnightMovements;
-import chess.pieceMovement.RookMovements;
 
 import java.util.Collection;
 import java.util.HashSet;
@@ -113,17 +110,61 @@ public class ChessGame {
      * @return True if the specified team is in check
      */
     public boolean isInCheck(TeamColor teamColor) {
-        for (int y = 1; y <= 8; y++) {
-            for (int x = 1; x <= 8; x++) {
-                ChessPiece piece = board.getPiece(new ChessPosition(x, y));
-                if (piece == null || piece.getTeamColor() == teamColor) {
-                    continue;
-                }
-                for (ChessMove move : piece.pieceMoves(board, new ChessPosition(x, y))) {
-                    if (move.getEndPosition().equals(findKing(teamColor))) {
-                        return true;
-                    }
-                }
+//        for (int y = 1; y <= 8; y++) {
+//            for (int x = 1; x <= 8; x++) {
+//                ChessPiece piece = board.getPiece(new ChessPosition(x, y));
+//                if (piece == null || piece.getTeamColor() == teamColor) {
+//                    continue;
+//                }
+//                for (ChessMove move : piece.pieceMoves(board, new ChessPosition(x, y))) {
+//                    if (move.getEndPosition().equals(findKing(teamColor))) {
+//                        return true;
+//                    }
+//                }
+//            }
+//        }
+
+        int pawnCheck = 1;
+        if(turn == TeamColor.BLACK){
+            pawnCheck = -1;
+        }
+
+        ChessPosition throne = findKing(teamColor);
+
+        //Check Pawns
+        //If the pieces there are pawns and the other team
+        if(board.getPiece(new ChessPosition((findKing(teamColor)).getRow()+1,findKing(teamColor).getColumn()+pawnCheck)).getPieceType() == ChessPiece.PieceType.PAWN && board.getPiece(findKing(teamColor)).getTeamColor() != turn){
+            return true;
+        }
+        if(board.getPiece(new ChessPosition((findKing(teamColor)).getRow()-1,findKing(teamColor).getColumn()+pawnCheck)).getPieceType() == ChessPiece.PieceType.PAWN && board.getPiece(findKing(teamColor)).getTeamColor() != turn){
+            return true;
+        }
+        //Check Bishop/Queen
+        board.addPiece(throne, new ChessPiece(teamColor, ChessPiece.PieceType.BISHOP));
+        for(ChessMove move : BishopMovements.getPossibilities(findKing(teamColor), board)){
+            if(board.getPiece(move.getEndPosition()).getPieceType() == ChessPiece.PieceType.BISHOP || board.getPiece(move.getEndPosition()).getPieceType() == ChessPiece.PieceType.QUEEN && board.getPiece(move.getEndPosition()).getTeamColor() != turn){
+                return true;
+            }
+        }
+        //Check Rook/Queen
+        board.addPiece(throne, new ChessPiece(teamColor, ChessPiece.PieceType.ROOK));
+        for(ChessMove move : BishopMovements.getPossibilities(findKing(teamColor), board)){
+            if(board.getPiece(move.getEndPosition()).getPieceType() == ChessPiece.PieceType.BISHOP || board.getPiece(move.getEndPosition()).getPieceType() == ChessPiece.PieceType.QUEEN && board.getPiece(move.getEndPosition()).getTeamColor() != turn){
+                return true;
+            }
+        }
+        //Check Knight
+        board.addPiece(throne, new ChessPiece(teamColor, ChessPiece.PieceType.KNIGHT));
+        for(ChessMove move : BishopMovements.getPossibilities(findKing(teamColor), board)){
+            if(board.getPiece(move.getEndPosition()).getPieceType() == ChessPiece.PieceType.BISHOP || board.getPiece(move.getEndPosition()).getPieceType() == ChessPiece.PieceType.QUEEN && board.getPiece(move.getEndPosition()).getTeamColor() != turn){
+                return true;
+            }
+        }
+        //Check King
+        board.addPiece(throne, new ChessPiece(teamColor, ChessPiece.PieceType.KING));
+        for(ChessMove move : BishopMovements.getPossibilities(findKing(teamColor), board)){
+            if(board.getPiece(move.getEndPosition()).getPieceType() == ChessPiece.PieceType.BISHOP || board.getPiece(move.getEndPosition()).getPieceType() == ChessPiece.PieceType.QUEEN && board.getPiece(move.getEndPosition()).getTeamColor() != turn){
+                return true;
             }
         }
         return false;
@@ -223,5 +264,13 @@ public class ChessGame {
     @Override
     public int hashCode() {
         return Objects.hash(board, turn);
+    }
+
+    @Override
+    public String toString() {
+        return "ChessGame{" +
+                "board=" + board +
+                ", turn=" + turn +
+                '}';
     }
 }
