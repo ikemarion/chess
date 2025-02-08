@@ -76,7 +76,6 @@ public class ChessGame {
             board.addPiece(move.getStartPosition(), placeholder);
             board.addPiece(move.getEndPosition(), placeholder2);
         }
-        System.out.println("Valid moves for " + startPosition + ": " + validMoves);
         return validMoves;
     }
 
@@ -225,13 +224,4 @@ public class ChessGame {
     public int hashCode() {
         return Objects.hash(board, turn);
     }
-
-    @Override
-    public String toString() {
-        return "ChessGame{" +
-                "board=" + board +
-                ", turn=" + turn +
-                '}';
-    }
-
 }

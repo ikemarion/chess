@@ -87,14 +87,6 @@ public class ChessPiece {
     public int hashCode() {
         return Objects.hash(shade, type);
     }
-
-    @Override
-    public String toString() {
-        return "ChessPiece{" +
-                "shade=" + shade +
-                ", type=" + type +
-                '}';
-    }
 }
 
 
