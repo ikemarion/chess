@@ -7,6 +7,7 @@ import chess.pieceMovement.RookMovements;
 
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Objects;
 
 /**
  * For a class that can manage a chess game, making moves on a board
@@ -58,7 +59,7 @@ public class ChessGame {
         ChessPiece piece = board.getPiece(startPosition);
 
         if(piece == null){
-            return null;
+            return new HashSet<>();
         }
         HashSet<ChessMove> validMoves = new HashSet<>();
         HashSet<ChessMove> allMoves = new HashSet<>(piece.pieceMoves(board, startPosition));
@@ -75,6 +76,7 @@ public class ChessGame {
             board.addPiece(move.getStartPosition(), placeholder);
             board.addPiece(move.getEndPosition(), placeholder2);
         }
+        System.out.println("Valid moves for " + startPosition + ": " + validMoves);
         return validMoves;
     }
 
@@ -191,4 +193,27 @@ public class ChessGame {
      */
     public ChessBoard getBoard() {
         return board;    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        ChessGame chessGame = (ChessGame) o;
+        return Objects.equals(board, chessGame.board) && turn == chessGame.turn;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(board, turn);
+    }
+
+    @Override
+    public String toString() {
+        return "ChessGame{" +
+                "board=" + board +
+                ", turn=" + turn +
+                '}';
+    }
+
 }

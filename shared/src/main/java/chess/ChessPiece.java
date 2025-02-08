@@ -58,17 +58,17 @@ public class ChessPiece {
      */
     public Collection<ChessMove> pieceMoves(ChessBoard board, ChessPosition myPosition) {
 
-        if(type == PieceType.BISHOP){
-            return BishopMovements.getPossibilities(myPosition,board);
-        }else if(type == PieceType.ROOK){
+        if (type == PieceType.BISHOP) {
+            return BishopMovements.getPossibilities(myPosition, board);
+        } else if (type == PieceType.ROOK) {
             return RookMovements.getPossibilities(myPosition, board);
-        }else if(type == PieceType.QUEEN){
+        } else if (type == PieceType.QUEEN) {
             return QueenMovements.getPossibilities(myPosition, board);
-        }else if(type == PieceType.KNIGHT){
+        } else if (type == PieceType.KNIGHT) {
             return KnightMovements.getPossibilities(myPosition, board);
-        }else if(type == PieceType.KING){
+        } else if (type == PieceType.KING) {
             return KingMovements.getPossibilities(myPosition, board);
-        }else if(type == PieceType.PAWN){
+        } else if (type == PieceType.PAWN) {
             return PawnMovements.getPossibilities(myPosition, board);
         }
         return new HashSet<ChessMove>();
@@ -79,8 +79,8 @@ public class ChessPiece {
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        ChessPiece that = (ChessPiece) o;
-        return shade == that.shade && type == that.type;
+        ChessPiece piece = (ChessPiece) o;
+        return shade == piece.shade && type == piece.type;
     }
 
     @Override
@@ -96,4 +96,5 @@ public class ChessPiece {
                 '}';
     }
 }
+
 
