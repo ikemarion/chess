@@ -1,64 +1,61 @@
 package server.handlers;
 
-import com.google.gson.Gson;
-import dataaccess.DataAccessException;
 import service.GameService;
-import model.GameData;
 import spark.Request;
 import spark.Response;
 import spark.Route;
-
+import com.google.gson.Gson;
 import java.util.List;
+import model.GameData;
 
 public class GameHandler {
     private GameService gameService;
-    private final Gson gson = new Gson();
+    private final Gson gson = new Gson(); // Add Gson for JSON handling
 
     public GameHandler(GameService gameService) {
+        if (gameService == null) {
+            throw new IllegalArgumentException("GameService cannot be null");
+        }
         this.gameService = gameService;
     }
 
     public Route listGames = (Request req, Response res) -> {
-        try {
-            String authToken = req.headers("authorization");
-            List<GameData> games = gameService.listGames(authToken);
-            res.status(200);
-            return gson.toJson(new GameListResponse(games));
-        } catch (DataAccessException e) {
-            res.status(401);
-            return gson.toJson(new ErrorResponse(e.getMessage()));
-        }
+        var authToken = req.headers("authorization");
+
+        List<GameData> games = gameService.listGames(authToken); // Correct method now exists
+        res.status(200);
+        return gson.toJson(games);
     };
 
     public Route createGame = (Request req, Response res) -> {
-        try {
-            String authToken = req.headers("authorization");
-            var requestData = gson.fromJson(req.body(), CreateGameRequest.class);
-            int gameID = gameService.createGame(authToken, requestData.gameName());
-            res.status(200);
-            return gson.toJson(new CreateGameResponse(gameID));
-        } catch (DataAccessException e) {
+        var authToken = req.headers("authorization");
+        var gameName = req.queryParams("gameName");
+
+        if (gameName == null || gameName.isEmpty()) {
             res.status(400);
-            return gson.toJson(new ErrorResponse(e.getMessage()));
+            return "{ \"message\": \"Error: game name is required\" }";
         }
+
+        int gameID = gameService.createGame(authToken, gameName); // Correct method now exists
+        res.status(200);
+        return "{ \"gameID\": " + gameID + " }";
     };
 
     public Route joinGame = (Request req, Response res) -> {
-        try {
-            String authToken = req.headers("authorization");
-            var requestData = gson.fromJson(req.body(), JoinGameRequest.class);
-            gameService.joinGame(authToken, requestData.playerColor(), requestData.gameID());
-            res.status(200);
-            return "{}";
-        } catch (DataAccessException e) {
-            res.status(400);
-            return gson.toJson(new ErrorResponse(e.getMessage()));
-        }
-    };
+        var authToken = req.headers("authorization");
+        var playerColor = req.queryParams("playerColor");
+        var gameIDString = req.queryParams("gameID");
 
-    private record GameListResponse(List<GameData> games) {}
-    private record CreateGameRequest(String gameName) {}
-    private record CreateGameResponse(int gameID) {}
-    private record JoinGameRequest(String playerColor, int gameID) {}
-    private record ErrorResponse(String message) {}
+        int gameID;
+        try {
+            gameID = Integer.parseInt(gameIDString);
+        } catch (NumberFormatException e) {
+            res.status(400);
+            return "{ \"message\": \"Error: invalid game ID\" }";
+        }
+
+        gameService.joinGame(authToken, playerColor, gameID);  // This should now work with correct parameters
+        res.status(200);
+        return "{}";
+    };
 }

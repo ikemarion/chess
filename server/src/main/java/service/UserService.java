@@ -5,7 +5,6 @@ import dataaccess.DataAccessException;
 import dataaccess.UserDAO;
 import model.AuthData;
 import model.UserData;
-
 import java.util.UUID;
 
 public class UserService {
@@ -21,10 +20,6 @@ public class UserService {
         if (username == null || password == null || email == null ||
                 username.isEmpty() || password.isEmpty() || email.isEmpty()) {
             throw new DataAccessException("Error: bad request");
-        }
-
-        if (userDAO.getUser(username) != null) {
-            throw new DataAccessException("Error: already taken");
         }
 
         UserData newUser = new UserData(username, password, email);
@@ -54,15 +49,6 @@ public class UserService {
     }
 
     public void logout(String authToken) throws DataAccessException {
-        if (authToken == null || authToken.isEmpty()) {
-            throw new DataAccessException("Error: bad request");
-        }
-
-        AuthData authData = authDAO.getAuth(authToken);
-        if (authData == null) {
-            throw new DataAccessException("Error: unauthorized");
-        }
-
         authDAO.deleteAuth(authToken);
     }
 }

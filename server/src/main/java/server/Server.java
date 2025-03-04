@@ -37,9 +37,8 @@ public class Server {
         Spark.post("/game", gameHandler.createGame);
         Spark.put("/game", gameHandler.joinGame);
 
-        Spark.init(); // Keeps structure matching original
+        Spark.init();
         Spark.awaitInitialization();
-
         System.out.println("Server running on port: " + Spark.port());
         return Spark.port();
     }

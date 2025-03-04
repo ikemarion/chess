@@ -1,58 +1,50 @@
 package server.handlers;
 
-import com.google.gson.Gson;
-import dataaccess.DataAccessException;
 import service.UserService;
-import model.AuthData;
+import model.UserData;
 import spark.Request;
 import spark.Response;
 import spark.Route;
+import com.google.gson.Gson;
 
 public class UserHandler {
     private UserService userService;
-    private final Gson gson = new Gson();
+    private final Gson gson = new Gson(); // Add Gson for JSON parsing
 
     public UserHandler(UserService userService) {
         this.userService = userService;
     }
 
     public Route register = (Request req, Response res) -> {
-        try {
-            var requestData = gson.fromJson(req.body(), RegisterRequest.class);
-            AuthData authData = userService.register(requestData.username(), requestData.password(), requestData.email());
-            res.status(200);
-            return gson.toJson(authData);
-        } catch (DataAccessException e) {
+        UserData userData = gson.fromJson(req.body(), UserData.class); // Parse JSON request body
+
+        if (userData.username() == null || userData.password() == null || userData.email() == null) {
             res.status(400);
-            return gson.toJson(new ErrorResponse(e.getMessage()));
+            return "{ \"message\": \"Error: Missing required fields\" }";
         }
+
+        var authData = userService.register(userData.username(), userData.password(), userData.email()); // Correct call
+        res.status(200);
+        return gson.toJson(authData);
     };
 
     public Route login = (Request req, Response res) -> {
-        try {
-            var requestData = gson.fromJson(req.body(), LoginRequest.class);
-            AuthData authData = userService.login(requestData.username(), requestData.password());
-            res.status(200);
-            return gson.toJson(authData);
-        } catch (DataAccessException e) {
-            res.status(401);
-            return gson.toJson(new ErrorResponse(e.getMessage()));
+        UserData userData = gson.fromJson(req.body(), UserData.class); // Parse JSON request body
+
+        if (userData.username() == null || userData.password() == null) {
+            res.status(400);
+            return "{ \"message\": \"Error: Missing required fields\" }";
         }
+
+        var authData = userService.login(userData.username(), userData.password()); // Correct call
+        res.status(200);
+        return gson.toJson(authData);
     };
 
     public Route logout = (Request req, Response res) -> {
-        try {
-            String authToken = req.headers("authorization");
-            userService.logout(authToken);
-            res.status(200);
-            return "{}";
-        } catch (DataAccessException e) {
-            res.status(401);
-            return gson.toJson(new ErrorResponse(e.getMessage()));
-        }
+        var authToken = req.headers("authorization");
+        userService.logout(authToken);
+        res.status(200);
+        return "{}";
     };
-
-    private record RegisterRequest(String username, String password, String email) {}
-    private record LoginRequest(String username, String password) {}
-    private record ErrorResponse(String message) {}
 }
