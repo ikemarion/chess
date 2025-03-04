@@ -11,28 +11,24 @@ public class Server {
     private final DatabaseService databaseService;
 
     public Server() {
-        // Set up in-memory DAOs
         UserDAO userDAO = new InMemoryUserDAO();
         GameDAO gameDAO = new InMemoryGameDAO();
         AuthDAO authDAO = new InMemoryAuthDAO();
         ClearDAO clearDAO = new ClearDAO(userDAO, gameDAO, authDAO);
 
-        // Initialize services
+        this.databaseService = new DatabaseService(clearDAO);
         this.userService = new UserService(userDAO, authDAO);
         this.gameService = new GameService(gameDAO, authDAO);
-        this.databaseService = new DatabaseService(clearDAO);
     }
 
     public int run(int desiredPort) {
         Spark.port(desiredPort);
         Spark.staticFiles.location("web");
 
-        // Register handlers
+        ClearHandler clearHandler = new ClearHandler(databaseService);
         UserHandler userHandler = new UserHandler(userService);
         GameHandler gameHandler = new GameHandler(gameService);
-        ClearHandler clearHandler = new ClearHandler(databaseService);
 
-        // Register API Endpoints
         Spark.delete("/db", clearHandler.clear);
         Spark.post("/user", userHandler.register);
         Spark.post("/session", userHandler.login);
@@ -41,9 +37,9 @@ public class Server {
         Spark.post("/game", gameHandler.createGame);
         Spark.put("/game", gameHandler.joinGame);
 
-        Spark.init(); // Keep this line to match your original structure
-
+        Spark.init(); // Keeps structure matching original
         Spark.awaitInitialization();
+
         System.out.println("Server running on port: " + Spark.port());
         return Spark.port();
     }

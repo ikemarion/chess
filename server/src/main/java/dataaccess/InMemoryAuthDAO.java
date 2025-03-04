@@ -4,7 +4,7 @@ import model.AuthData;
 import java.util.HashMap;
 import java.util.Map;
 
-public class InMemoryAuthDAO {
+public class InMemoryAuthDAO implements AuthDAO {
     private final Map<String, AuthData> authTokens = new HashMap<>();
 
     @Override

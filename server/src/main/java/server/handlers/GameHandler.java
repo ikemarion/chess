@@ -11,7 +11,7 @@ import spark.Route;
 import java.util.List;
 
 public class GameHandler {
-    private final GameService gameService;
+    private GameService gameService;
     private final Gson gson = new Gson();
 
     public GameHandler(GameService gameService) {

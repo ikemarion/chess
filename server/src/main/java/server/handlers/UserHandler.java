@@ -9,7 +9,7 @@ import spark.Response;
 import spark.Route;
 
 public class UserHandler {
-    private final UserService userService;
+    private UserService userService;
     private final Gson gson = new Gson();
 
     public UserHandler(UserService userService) {

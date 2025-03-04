@@ -6,9 +6,13 @@ import spark.Response;
 import spark.Route;
 
 public class ClearHandler {
-    private final DatabaseService databaseService;
+    private DatabaseService databaseService;
 
+    // ✅ Ensure databaseService is assigned properly
     public ClearHandler(DatabaseService databaseService) {
+        if (databaseService == null) {  // ✅ Prevents null reference issues
+            throw new IllegalArgumentException("DatabaseService cannot be null");
+        }
         this.databaseService = databaseService;
     }
 
