@@ -6,7 +6,8 @@ import dataaccess.DataAccessException;
 import spark.Request;
 import spark.Response;
 import spark.Route;
-import model.GameRequest;
+import model.GameData;
+import java.util.List;
 
 public class GameHandler {
     private GameService gameService;
@@ -18,91 +19,108 @@ public class GameHandler {
 
     public Route listGames = (Request req, Response res) -> {
         var authToken = req.headers("authorization");
-
         if (authToken == null || authToken.trim().isEmpty()) {
-            res.status(401); // Unauthorized
+            res.status(401);
             return gson.toJson(new ErrorResponse("Error: Invalid authentication token"));
         }
-
         try {
-            var games = gameService.listGames(authToken);
+            List<GameData> games = gameService.listGames(authToken);
             res.status(200);
-            return gson.toJson(games);
+            return gson.toJson(new GamesWrapper(games));
         } catch (DataAccessException e) {
-            res.status(401); // Unauthorized
+            // interpret exception message
+            setProperStatus(res, e.getMessage());
             return gson.toJson(new ErrorResponse("Error: " + e.getMessage()));
         }
     };
 
     public Route createGame = (Request req, Response res) -> {
         var authToken = req.headers("authorization");
-
         if (authToken == null || authToken.trim().isEmpty()) {
-            res.status(401); // Unauthorized
+            res.status(401);
             return gson.toJson(new ErrorResponse("Error: Invalid authentication token"));
         }
-
         String body = req.body();
         GameRequest gameRequest = gson.fromJson(body, GameRequest.class);
-        String gameName = gameRequest.getGameName();
-
-        if (gameName == null || gameName.trim().isEmpty()) {
+        if (gameRequest == null || gameRequest.getGameName() == null || gameRequest.getGameName().trim().isEmpty()) {
             res.status(400);
             return gson.toJson(new ErrorResponse("Error: game name is required"));
         }
-
         try {
-            int gameID = gameService.createGame(authToken, gameName);
+            int gameID = gameService.createGame(authToken, gameRequest.getGameName());
             res.status(200);
             return gson.toJson(new GameResponse(gameID));
         } catch (DataAccessException e) {
-            res.status(400);
+            setProperStatus(res, e.getMessage());
             return gson.toJson(new ErrorResponse("Error: " + e.getMessage()));
         }
     };
 
     public Route joinGame = (Request req, Response res) -> {
         var authToken = req.headers("authorization");
-
         if (authToken == null || authToken.trim().isEmpty()) {
-            res.status(401); // Unauthorized
+            res.status(401);
             return gson.toJson(new ErrorResponse("Error: Invalid authentication token"));
         }
-
-        String playerColor = req.queryParams("playerColor");
-
-        // Ensure gameID is not null or empty before parsing
-        String gameIDParam = req.queryParams("gameID");
-        if (gameIDParam == null || gameIDParam.trim().isEmpty()) {
-            res.status(400); // Bad request
+        String body = req.body();
+        JoinGameRequest joinRequest = gson.fromJson(body, JoinGameRequest.class);
+        if (joinRequest == null || joinRequest.playerColor == null || joinRequest.playerColor.trim().isEmpty()) {
+            res.status(400);
+            return gson.toJson(new ErrorResponse("Error: playerColor is required"));
+        }
+        if (joinRequest.gameID <= 0) {
+            res.status(400);
             return gson.toJson(new ErrorResponse("Error: gameID is required"));
         }
-
-        int gameID;
         try {
-            gameID = Integer.parseInt(gameIDParam);
-        } catch (NumberFormatException e) {
-            res.status(400); // Bad request
-            return gson.toJson(new ErrorResponse("Error: Invalid gameID format"));
-        }
-
-        try {
-            gameService.joinGame(authToken, playerColor, gameID);
+            gameService.joinGame(authToken, joinRequest.playerColor, joinRequest.gameID);
             res.status(200);
-            return "{}"; // Empty JSON object for successful join
+            return "{}";
         } catch (DataAccessException e) {
-            res.status(400);
+            setProperStatus(res, e.getMessage());
             return gson.toJson(new ErrorResponse("Error: " + e.getMessage()));
         }
     };
 
+    private void setProperStatus(Response res, String message) {
+        if (message == null) {
+            res.status(400);
+            return;
+        }
+        // If message says "unauthorized" or "Invalid authentication token", set 401
+        if (message.toLowerCase().contains("unauthorized") || message.toLowerCase().contains("invalid authentication token")) {
+            res.status(401);
+        } else {
+            // default to 400 for other errors
+            res.status(400);
+        }
+    }
+
+    private static class GamesWrapper {
+        private List<GameData> games;
+        public GamesWrapper(List<GameData> games) {
+            this.games = games;
+        }
+        public List<GameData> getGames() {
+            return games;
+        }
+    }
+
+    private static class GameRequest {
+        private String gameName;
+        public String getGameName() { return gameName; }
+    }
+
+    private static class JoinGameRequest {
+        private String playerColor;
+        private int gameID;
+    }
+
     public static class ErrorResponse {
         private String message;
-
         public ErrorResponse(String message) {
             this.message = message;
         }
-
         public String getMessage() {
             return message;
         }
@@ -110,11 +128,9 @@ public class GameHandler {
 
     public static class GameResponse {
         private int gameID;
-
         public GameResponse(int gameID) {
             this.gameID = gameID;
         }
-
         public int getGameID() {
             return gameID;
         }
