@@ -10,11 +10,7 @@ public class DatabaseService {
         this.clearDAO = clearDAO;
     }
 
-    public void clearDatabase() throws DataAccessException {
-        try {
-            clearDAO.clear();
-        } catch (Exception e) {
-            throw new DataAccessException("Error: failed to clear database");
-        }
+    public void clear() throws DataAccessException {
+        clearDAO.clear();
     }
 }

@@ -81,9 +81,6 @@ public class GameHandler {
         }
     };
 
-    /**
-     * Sets the correct status code based on the error message from DataAccessException.
-     */
     private void setProperStatus(Response res, String msg) {
         if (msg == null) {
             res.status(400);

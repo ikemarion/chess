@@ -16,6 +16,14 @@ public class GameService {
         this.authDAO = authDAO;
     }
 
+    private AuthData validateAuth(String authToken) throws DataAccessException {
+        AuthData authData = authDAO.getAuth(authToken);
+        if (authData == null) {
+            throw new DataAccessException("Error: unauthorized");
+        }
+        return authData;
+    }
+
     public List<GameData> listGames(String authToken) throws DataAccessException {
         validateAuth(authToken);
         return gameDAO.listGames();
@@ -24,12 +32,10 @@ public class GameService {
     public int createGame(String authToken, String gameName) throws DataAccessException {
         validateAuth(authToken);
 
-        // Validate that the game name is provided
         if (gameName == null || gameName.trim().isEmpty()) {
             throw new DataAccessException("Error: game name is required");
         }
 
-        // Proceed to create the new game
         GameData newGame = new GameData(0, null, null, gameName, null);
         return gameDAO.createGame(newGame);
     }
@@ -45,12 +51,10 @@ public class GameService {
         if (playerColor.equalsIgnoreCase("WHITE") && game.whiteUsername() != null) {
             throw new DataAccessException("Error: already taken");
         }
-
         if (playerColor.equalsIgnoreCase("BLACK") && game.blackUsername() != null) {
             throw new DataAccessException("Error: already taken");
         }
 
-        // Update the game with the new player
         GameData updatedGame = new GameData(
                 game.gameID(),
                 playerColor.equalsIgnoreCase("WHITE") ? authData.username() : game.whiteUsername(),
@@ -60,13 +64,5 @@ public class GameService {
         );
 
         gameDAO.updateGame(updatedGame);
-    }
-
-    private AuthData validateAuth(String authToken) throws DataAccessException {
-        AuthData authData = authDAO.getAuth(authToken);
-        if (authData == null) {
-            throw new DataAccessException("Error: unauthorized");
-        }
-        return authData;
     }
 }

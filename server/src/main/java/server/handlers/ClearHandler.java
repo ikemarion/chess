@@ -13,7 +13,7 @@ public class ClearHandler {
     }
 
     public Route clear = (Request req, Response res) -> {
-        databaseService.clearDatabase();
+        databaseService.clear();
         res.status(200);
         return "{}";
     };
