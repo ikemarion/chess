@@ -1,16 +1,17 @@
 package service;
 
-import dataaccess.AuthDAO;
-import dataaccess.DataAccessException;
-import dataaccess.InMemoryAuthDAO;
-import dataaccess.InMemoryUserDAO;
-import dataaccess.UserDAO;
+import dataaccess.*;
+import model.AuthData;
 import model.UserData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Tests UserService methods directly (no HTTP).
+ * Covers register, login, logout, and checks that DAOs are exercised.
+ */
 public class UserServiceTest {
 
     private UserService userService;
@@ -24,48 +25,77 @@ public class UserServiceTest {
         userService = new UserService(userDAO, authDAO);
     }
 
+    /**
+     * Positive test: Register a new user successfully.
+     */
     @Test
     void testRegister_Success() throws DataAccessException {
         var authData = userService.register("newUser", "password", "new@example.com");
-        assertNotNull(authData, "AuthData should not be null when registering a new user.");
-        assertEquals("newUser", authData.username(), "Usernames should match.");
+        assertNotNull(authData, "AuthData should not be null on successful registration.");
+        assertEquals("newUser", authData.username(), "Username should match.");
 
-        var storedUser = userDAO.getUser("newUser");
-        assertNotNull(storedUser, "User should now exist in the DAO.");
-        assertEquals("new@example.com", storedUser.email(), "Emails should match.");
+        // Confirm user is in userDAO
+        UserData storedUser = userDAO.getUser("newUser");
+        assertNotNull(storedUser, "User should be created in the DAO.");
+        assertEquals("new@example.com", storedUser.email(), "Email should match stored user.");
     }
 
+    /**
+     * Negative test: Register a user who already exists.
+     */
     @Test
-    void testRegister_UserAlreadyExists() throws DataAccessException {
-        userDAO.createUser(new UserData("existingUser", "pass", "ex@example.com"));
-
+    void testRegister_AlreadyExists() throws DataAccessException {
+        userDAO.createUser(new UserData("existingUser", "pw", "ex@example.com"));
+        // Attempt to register same username
         assertThrows(DataAccessException.class, () -> {
-            userService.register("existingUser", "newpass", "again@example.com");
-        }, "Registering an existing user should throw DataAccessException");
+            userService.register("existingUser", "anotherPass", "again@example.com");
+        }, "Registering a duplicate user should throw an exception.");
     }
 
+    /**
+     * Positive test: Login with correct credentials.
+     */
     @Test
     void testLogin_Success() throws DataAccessException {
         userService.register("loginUser", "pass123", "login@example.com");
-
         var authData = userService.login("loginUser", "pass123");
-        assertNotNull(authData, "AuthData should not be null on successful login.");
-        assertEquals("loginUser", authData.username(), "Usernames should match.");
+        assertNotNull(authData, "Should return AuthData on successful login.");
+        assertEquals("loginUser", authData.username(), "Username should match.");
     }
 
+    /**
+     * Negative test: Login with bad credentials.
+     */
     @Test
     void testLogin_InvalidCredentials() throws DataAccessException {
-        userService.register("wrongUser", "rightPass", "some@example.com");
-
+        userService.register("userX", "secret", "x@example.com");
+        // Wrong password
         assertThrows(DataAccessException.class, () -> {
-            userService.login("wrongUser", "badPass");
-        }, "Invalid credentials should throw DataAccessException");
+            userService.login("userX", "wrong");
+        }, "Logging in with wrong password should fail.");
     }
 
+    /**
+     * Positive test: Logout with valid token.
+     */
+    @Test
+    void testLogout_Success() throws DataAccessException {
+        var authData = userService.register("logoutUser", "pword", "mail@example.com");
+        String token = authData.authToken();
+
+        userService.logout(token);
+
+        // Confirm token is removed
+        assertNull(authDAO.getAuth(token), "Auth token should be removed after logout.");
+    }
+
+    /**
+     * Negative test: Logout with invalid token.
+     */
     @Test
     void testLogout_InvalidToken() {
         assertThrows(DataAccessException.class, () -> {
-            userService.logout("nonExistentToken");
+            userService.logout("fakeToken");
         }, "Logging out with non-existent token should throw DataAccessException.");
     }
 }

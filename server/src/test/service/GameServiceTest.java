@@ -1,10 +1,6 @@
 package service;
 
-import dataaccess.AuthDAO;
-import dataaccess.DataAccessException;
-import dataaccess.GameDAO;
-import dataaccess.InMemoryAuthDAO;
-import dataaccess.InMemoryGameDAO;
+import dataaccess.*;
 import model.AuthData;
 import model.GameData;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +10,10 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Tests GameService methods directly (no HTTP).
+ * Covers createGame, listGames, joinGame, with positive & negative scenarios.
+ */
 public class GameServiceTest {
 
     private GameService gameService;
@@ -27,60 +27,126 @@ public class GameServiceTest {
         gameService = new GameService(gameDAO, authDAO);
     }
 
+    /**
+     * Positive: createGame with valid token & valid name
+     */
     @Test
     void testCreateGame_Success() throws DataAccessException {
+        // Insert a valid token
         String validToken = "token123";
         authDAO.createAuth(new AuthData(validToken, "userOne"));
 
         int gameID = gameService.createGame(validToken, "TestGame");
-        assertTrue(gameID > 0, "Game ID should be > 0 for a newly created game.");
+        assertTrue(gameID > 0, "Game ID should be a positive integer.");
 
-        var gameData = gameDAO.getGame(gameID);
-        assertNotNull(gameData, "Created game should exist in DAO.");
-        assertEquals("TestGame", gameData.gameName(), "Game name should match.");
+        // Confirm in gameDAO
+        var storedGame = gameDAO.getGame(gameID);
+        assertNotNull(storedGame, "Game should be stored.");
+        assertEquals("TestGame", storedGame.gameName(), "Game name should match.");
     }
 
+    /**
+     * Negative: createGame with invalid token
+     */
     @Test
     void testCreateGame_Unauthorized() {
-        String invalidToken = "badToken";
-
         assertThrows(DataAccessException.class, () -> {
-            gameService.createGame(invalidToken, "NoGame");
-        }, "Invalid token should throw DataAccessException.");
+            gameService.createGame("invalidToken", "GameX");
+        }, "Invalid token => DataAccessException.");
     }
 
+    /**
+     * Positive: listGames with valid token
+     */
     @Test
     void testListGames_Success() throws DataAccessException {
-        String validToken = "tokenABC";
-        authDAO.createAuth(new AuthData(validToken, "someUser"));
+        // Valid token
+        authDAO.createAuth(new AuthData("listToken", "lister"));
 
+        // Create 2 games
         gameDAO.createGame(new GameData(1, "GameOne", null, null, null));
         gameDAO.createGame(new GameData(2, "GameTwo", null, null, null));
 
-        List<GameData> games = gameService.listGames(validToken);
-        assertEquals(2, games.size(), "Should return two games.");
+        List<GameData> games = gameService.listGames("listToken");
+        assertEquals(2, games.size(), "Should list two games.");
     }
 
+    /**
+     * Negative: listGames with invalid token
+     */
     @Test
     void testListGames_Unauthorized() {
-        String invalidToken = "zzzToken";
         assertThrows(DataAccessException.class, () -> {
-            gameService.listGames(invalidToken);
-        }, "Listing games with invalid token should throw an error.");
+            gameService.listGames("nopeToken");
+        });
     }
 
+    /**
+     * Positive: joinGame with valid token & open color
+     */
+    @Test
+    void testJoinGame_Success() throws DataAccessException {
+        authDAO.createAuth(new AuthData("joinToken", "joiner"));
+        gameDAO.createGame(new GameData(1, "JoinableGame", null, null, null));
+
+        gameService.joinGame("joinToken", "WHITE", 1);
+
+        var updated = gameDAO.getGame(1);
+        assertEquals("joiner", updated.whiteUsername(), "joiner should occupy WHITE");
+    }
+
+    /**
+     * Negative: joinGame color already taken
+     */
     @Test
     void testJoinGame_ColorTaken() throws DataAccessException {
-        String token1 = "firstToken";
-        authDAO.createAuth(new AuthData(token1, "userOne"));
-
-        String token2 = "secondToken";
-        authDAO.createAuth(new AuthData(token2, "userTwo"));
+        authDAO.createAuth(new AuthData("firstToken", "userOne"));
+        authDAO.createAuth(new AuthData("secondToken", "userTwo"));
 
         gameDAO.createGame(new GameData(1, "ConflictGame", null, null, null));
+        // userOne takes WHITE
+        gameService.joinGame("firstToken", "WHITE", 1);
+
+        // userTwo tries to take WHITE => should fail
+        assertThrows(DataAccessException.class, () -> {
+            gameService.joinGame("secondToken", "WHITE", 1);
+        }, "Color already taken => exception.");
+    }
+
+    /**
+     * Negative: joinGame invalid token
+     */
+    @Test
+    void testJoinGame_InvalidToken() throws DataAccessException {
+        gameDAO.createGame(new GameData(1, "InvalidTokenGame", null, null, null));
+        assertThrows(DataAccessException.class, () -> {
+            gameService.joinGame("bogusToken", "WHITE", 1);
+        }, "Invalid token => exception.");
+    }
+
+    /**
+     * Negative: joinGame invalid color
+     */
+    @Test
+    void testJoinGame_InvalidColor() throws DataAccessException {
+        authDAO.createAuth(new AuthData("colorToken", "colorUser"));
+        gameDAO.createGame(new GameData(1, "BadColorGame", null, null, null));
 
         assertThrows(DataAccessException.class, () -> {
-            gameService.joinGame(token2, "WHITE", 1);
-        }, "Joining a color that's already taken should throw DataAccessException.");
+            gameService.joinGame("colorToken", "RED", 1);
+        }, "Invalid color => exception.");
+    }
+
+    /**
+     * Negative: joinGame nonexistent game
+     */
+    @Test
+    void testJoinGame_NonexistentGame() throws DataAccessException {
+        authDAO.createAuth(new AuthData("gameToken", "someUser"));
+        // We do NOT create a game in the DAO => gameID=999 doesn't exist
+
+        assertThrows(DataAccessException.class, () -> {
+            gameService.joinGame("gameToken", "WHITE", 999);
+        }, "Nonexistent game => exception.");
     }
 }
