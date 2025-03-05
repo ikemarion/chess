@@ -1,61 +1,94 @@
 package server.handlers;
 
 import service.GameService;
+import com.google.gson.Gson;
+import dataaccess.DataAccessException;
 import spark.Request;
 import spark.Response;
 import spark.Route;
-import com.google.gson.Gson;
-import java.util.List;
-import model.GameData;
+import model.GameRequest;
 
 public class GameHandler {
     private GameService gameService;
-    private final Gson gson = new Gson(); // Add Gson for JSON handling
+    private final Gson gson = new Gson();
 
     public GameHandler(GameService gameService) {
-        if (gameService == null) {
-            throw new IllegalArgumentException("GameService cannot be null");
-        }
         this.gameService = gameService;
     }
 
     public Route listGames = (Request req, Response res) -> {
         var authToken = req.headers("authorization");
 
-        List<GameData> games = gameService.listGames(authToken); // Correct method now exists
-        res.status(200);
-        return gson.toJson(games);
+        try {
+            var games = gameService.listGames(authToken);
+            res.status(200);
+            return gson.toJson(games);
+        } catch (DataAccessException e) {
+            res.status(401);
+            return gson.toJson(new ErrorResponse("Error: " + e.getMessage()));
+        }
     };
 
     public Route createGame = (Request req, Response res) -> {
         var authToken = req.headers("authorization");
-        var gameName = req.queryParams("gameName");
 
-        if (gameName == null || gameName.isEmpty()) {
+        // Parse the request body as JSON to extract the gameName
+        String body = req.body();
+        GameRequest gameRequest = gson.fromJson(body, GameRequest.class);
+        String gameName = gameRequest.getGameName();
+
+        // Check if the gameName is null or empty
+        if (gameName == null || gameName.trim().isEmpty()) {
             res.status(400);
-            return "{ \"message\": \"Error: game name is required\" }";
+            return gson.toJson(new ErrorResponse("Error: game name is required"));
         }
 
-        int gameID = gameService.createGame(authToken, gameName); // Correct method now exists
-        res.status(200);
-        return "{ \"gameID\": " + gameID + " }";
+        try {
+            int gameID = gameService.createGame(authToken, gameName);
+            res.status(200);
+            return gson.toJson(new GameResponse(gameID));
+        } catch (DataAccessException e) {
+            res.status(400);
+            return gson.toJson(new ErrorResponse("Error: " + e.getMessage()));
+        }
     };
 
     public Route joinGame = (Request req, Response res) -> {
         var authToken = req.headers("authorization");
-        var playerColor = req.queryParams("playerColor");
-        var gameIDString = req.queryParams("gameID");
+        String playerColor = req.queryParams("playerColor");
+        int gameID = Integer.parseInt(req.queryParams("gameID"));
 
-        int gameID;
         try {
-            gameID = Integer.parseInt(gameIDString);
-        } catch (NumberFormatException e) {
+            gameService.joinGame(authToken, playerColor, gameID);
+            res.status(200);
+            return "{}";
+        } catch (DataAccessException e) {
             res.status(400);
-            return "{ \"message\": \"Error: invalid game ID\" }";
+            return gson.toJson(new ErrorResponse("Error: " + e.getMessage()));
+        }
+    };
+
+    public static class ErrorResponse {
+        private String message;
+
+        public ErrorResponse(String message) {
+            this.message = message;
         }
 
-        gameService.joinGame(authToken, playerColor, gameID);  // This should now work with correct parameters
-        res.status(200);
-        return "{}";
-    };
+        public String getMessage() {
+            return message;
+        }
+    }
+
+    public static class GameResponse {
+        private int gameID;
+
+        public GameResponse(int gameID) {
+            this.gameID = gameID;
+        }
+
+        public int getGameID() {
+            return gameID;
+        }
+    }
 }

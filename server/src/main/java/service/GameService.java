@@ -1,11 +1,11 @@
 package service;
 
-import dataaccess.AuthDAO;
 import dataaccess.GameDAO;
+import dataaccess.AuthDAO;
 import dataaccess.DataAccessException;
-import model.AuthData;
 import model.GameData;
-import java.util.List;  // ✅ Add this import for List
+import model.AuthData;
+import java.util.List;
 
 public class GameService {
     private final GameDAO gameDAO;
@@ -24,31 +24,33 @@ public class GameService {
     public int createGame(String authToken, String gameName) throws DataAccessException {
         validateAuth(authToken);
 
-        if (gameName == null || gameName.isEmpty()) {
-            throw new DataAccessException("Error: game name required");
+        // Validate that the game name is provided
+        if (gameName == null || gameName.trim().isEmpty()) {
+            throw new DataAccessException("Error: game name is required");
         }
 
+        // Proceed to create the new game
         GameData newGame = new GameData(0, null, null, gameName, null);
         return gameDAO.createGame(newGame);
     }
 
     public void joinGame(String authToken, String playerColor, int gameID) throws DataAccessException {
-        AuthData authData = validateAuth(authToken); // Validate token
-        GameData game = gameDAO.getGame(gameID); // Get the game
+        AuthData authData = validateAuth(authToken);
+        GameData game = gameDAO.getGame(gameID);
 
-        if (game == null) {
-            throw new DataAccessException("Error: game not found");
+        if (!playerColor.equalsIgnoreCase("WHITE") && !playerColor.equalsIgnoreCase("BLACK")) {
+            throw new DataAccessException("Error: bad request");
         }
 
         if (playerColor.equalsIgnoreCase("WHITE") && game.whiteUsername() != null) {
-            throw new DataAccessException("Error: WHITE already taken");
+            throw new DataAccessException("Error: already taken");
         }
 
         if (playerColor.equalsIgnoreCase("BLACK") && game.blackUsername() != null) {
-            throw new DataAccessException("Error: BLACK already taken");
+            throw new DataAccessException("Error: already taken");
         }
 
-        // Update the game with the new player's color
+        // Update the game with the new player
         GameData updatedGame = new GameData(
                 game.gameID(),
                 playerColor.equalsIgnoreCase("WHITE") ? authData.username() : game.whiteUsername(),

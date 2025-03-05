@@ -1,8 +1,8 @@
 package service;
 
 import dataaccess.AuthDAO;
-import dataaccess.DataAccessException;
 import dataaccess.UserDAO;
+import dataaccess.DataAccessException;
 import model.AuthData;
 import model.UserData;
 import java.util.UUID;
@@ -22,6 +22,11 @@ public class UserService {
             throw new DataAccessException("Error: bad request");
         }
 
+        // Check if the user already exists
+        if (userDAO.getUser(username) != null) {
+            throw new DataAccessException("Error: User already exists");
+        }
+
         UserData newUser = new UserData(username, password, email);
         userDAO.createUser(newUser);
 
@@ -37,18 +42,26 @@ public class UserService {
             throw new DataAccessException("Error: bad request");
         }
 
+        // Check if the user exists and the password is correct
         if (!userDAO.authenticateUser(username, password)) {
             throw new DataAccessException("Error: unauthorized");
         }
 
+        // Generate authToken after successful login
         String authToken = UUID.randomUUID().toString();
         AuthData authData = new AuthData(authToken, username);
+
+        // Store authToken in the database
         authDAO.createAuth(authData);
 
         return authData;
     }
 
     public void logout(String authToken) throws DataAccessException {
+        AuthData authData = authDAO.getAuth(authToken);
+        if (authData == null) {
+            throw new DataAccessException("Invalid authentication token");  // Throw error for invalid token
+        }
         authDAO.deleteAuth(authToken);
     }
 }
