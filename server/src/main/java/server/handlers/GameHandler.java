@@ -19,12 +19,17 @@ public class GameHandler {
     public Route listGames = (Request req, Response res) -> {
         var authToken = req.headers("authorization");
 
+        if (authToken == null || authToken.trim().isEmpty()) {
+            res.status(401); // Unauthorized
+            return gson.toJson(new ErrorResponse("Error: Invalid authentication token"));
+        }
+
         try {
             var games = gameService.listGames(authToken);
             res.status(200);
             return gson.toJson(games);
         } catch (DataAccessException e) {
-            res.status(401);
+            res.status(401); // Unauthorized
             return gson.toJson(new ErrorResponse("Error: " + e.getMessage()));
         }
     };
@@ -32,12 +37,15 @@ public class GameHandler {
     public Route createGame = (Request req, Response res) -> {
         var authToken = req.headers("authorization");
 
-        // Parse the request body as JSON to extract the gameName
+        if (authToken == null || authToken.trim().isEmpty()) {
+            res.status(401); // Unauthorized
+            return gson.toJson(new ErrorResponse("Error: Invalid authentication token"));
+        }
+
         String body = req.body();
         GameRequest gameRequest = gson.fromJson(body, GameRequest.class);
         String gameName = gameRequest.getGameName();
 
-        // Check if the gameName is null or empty
         if (gameName == null || gameName.trim().isEmpty()) {
             res.status(400);
             return gson.toJson(new ErrorResponse("Error: game name is required"));
@@ -55,13 +63,33 @@ public class GameHandler {
 
     public Route joinGame = (Request req, Response res) -> {
         var authToken = req.headers("authorization");
+
+        if (authToken == null || authToken.trim().isEmpty()) {
+            res.status(401); // Unauthorized
+            return gson.toJson(new ErrorResponse("Error: Invalid authentication token"));
+        }
+
         String playerColor = req.queryParams("playerColor");
-        int gameID = Integer.parseInt(req.queryParams("gameID"));
+
+        // Ensure gameID is not null or empty before parsing
+        String gameIDParam = req.queryParams("gameID");
+        if (gameIDParam == null || gameIDParam.trim().isEmpty()) {
+            res.status(400); // Bad request
+            return gson.toJson(new ErrorResponse("Error: gameID is required"));
+        }
+
+        int gameID;
+        try {
+            gameID = Integer.parseInt(gameIDParam);
+        } catch (NumberFormatException e) {
+            res.status(400); // Bad request
+            return gson.toJson(new ErrorResponse("Error: Invalid gameID format"));
+        }
 
         try {
             gameService.joinGame(authToken, playerColor, gameID);
             res.status(200);
-            return "{}";
+            return "{}"; // Empty JSON object for successful join
         } catch (DataAccessException e) {
             res.status(400);
             return gson.toJson(new ErrorResponse("Error: " + e.getMessage()));

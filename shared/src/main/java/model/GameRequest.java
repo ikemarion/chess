@@ -2,15 +2,13 @@ package model;
 
 public class GameRequest {
     private String gameName;
-    private String userId;  // Add more fields if needed
+    private String userId;
 
-    // Constructors
     public GameRequest(String gameName, String userId) {
         this.gameName = gameName;
         this.userId = userId;
     }
 
-    // Getters and Setters
     public String getGameName() {
         return gameName;
     }
