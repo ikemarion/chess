@@ -28,7 +28,6 @@ public class GameHandler {
             res.status(200);
             return gson.toJson(new GamesWrapper(games));
         } catch (DataAccessException e) {
-            // interpret exception message
             setProperStatus(res, e.getMessage());
             return gson.toJson(new ErrorResponse("Error: " + e.getMessage()));
         }
@@ -82,16 +81,20 @@ public class GameHandler {
         }
     };
 
-    private void setProperStatus(Response res, String message) {
-        if (message == null) {
+    /**
+     * Sets the correct status code based on the error message from DataAccessException.
+     */
+    private void setProperStatus(Response res, String msg) {
+        if (msg == null) {
             res.status(400);
             return;
         }
-        // If message says "unauthorized" or "Invalid authentication token", set 401
-        if (message.toLowerCase().contains("unauthorized") || message.toLowerCase().contains("invalid authentication token")) {
+        String lower = msg.toLowerCase();
+        if (lower.contains("unauthorized") || lower.contains("invalid authentication token")) {
             res.status(401);
+        } else if (lower.contains("already taken")) {
+            res.status(403);
         } else {
-            // default to 400 for other errors
             res.status(400);
         }
     }
