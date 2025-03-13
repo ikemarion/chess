@@ -31,7 +31,7 @@ public class GameServiceTest {
      * Positive: createGame with valid token & valid name
      */
     @Test
-    void testCreateGame_Success() throws DataAccessException {
+    void testCreateGameSuccess() throws DataAccessException {
         // Insert a valid token
         String validToken = "token123";
         authDAO.createAuth(new AuthData(validToken, "userOne"));
@@ -49,7 +49,7 @@ public class GameServiceTest {
      * Negative: createGame with invalid token
      */
     @Test
-    void testCreateGame_Unauthorized() {
+    void testCreateGameUnauthorized() {
         assertThrows(DataAccessException.class, () -> {
             gameService.createGame("invalidToken", "GameX");
         }, "Invalid token => DataAccessException.");
@@ -59,7 +59,7 @@ public class GameServiceTest {
      * Positive: listGames with valid token
      */
     @Test
-    void testListGames_Success() throws DataAccessException {
+    void testListGamesSuccess() throws DataAccessException {
         // Valid token
         authDAO.createAuth(new AuthData("listToken", "lister"));
 
@@ -75,7 +75,7 @@ public class GameServiceTest {
      * Negative: listGames with invalid token
      */
     @Test
-    void testListGames_Unauthorized() {
+    void testListGamesUnauthorized() {
         assertThrows(DataAccessException.class, () -> {
             gameService.listGames("nopeToken");
         });
@@ -85,7 +85,7 @@ public class GameServiceTest {
      * Positive: joinGame with valid token & open color
      */
     @Test
-    void testJoinGame_Success() throws DataAccessException {
+    void testJoinGameSuccess() throws DataAccessException {
         authDAO.createAuth(new AuthData("joinToken", "joiner"));
         gameDAO.createGame(new GameData(1, "JoinableGame", null, null, null));
 
@@ -99,7 +99,7 @@ public class GameServiceTest {
      * Negative: joinGame color already taken
      */
     @Test
-    void testJoinGame_ColorTaken() throws DataAccessException {
+    void testJoinGameColorTaken() throws DataAccessException {
         authDAO.createAuth(new AuthData("firstToken", "userOne"));
         authDAO.createAuth(new AuthData("secondToken", "userTwo"));
 
@@ -117,7 +117,7 @@ public class GameServiceTest {
      * Negative: joinGame invalid token
      */
     @Test
-    void testJoinGame_InvalidToken() throws DataAccessException {
+    void testJoinGameInvalidToken() throws DataAccessException {
         gameDAO.createGame(new GameData(1, "InvalidTokenGame", null, null, null));
         assertThrows(DataAccessException.class, () -> {
             gameService.joinGame("bogusToken", "WHITE", 1);
@@ -128,7 +128,7 @@ public class GameServiceTest {
      * Negative: joinGame invalid color
      */
     @Test
-    void testJoinGame_InvalidColor() throws DataAccessException {
+    void testJoinGameInvalidColor() throws DataAccessException {
         authDAO.createAuth(new AuthData("colorToken", "colorUser"));
         gameDAO.createGame(new GameData(1, "BadColorGame", null, null, null));
 
@@ -141,9 +141,9 @@ public class GameServiceTest {
      * Negative: joinGame nonexistent game
      */
     @Test
-    void testJoinGame_NonexistentGame() throws DataAccessException {
+    void testJoinGameNonexistentGame() throws DataAccessException {
         authDAO.createAuth(new AuthData("gameToken", "someUser"));
-        // We do NOT create a game in the DAO => gameID=999 doesn't exist
+        // We do NOT create a game => gameID=999 doesn't exist
 
         assertThrows(DataAccessException.class, () -> {
             gameService.joinGame("gameToken", "WHITE", 999);

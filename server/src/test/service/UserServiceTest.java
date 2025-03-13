@@ -29,7 +29,7 @@ public class UserServiceTest {
      * Positive test: Register a new user successfully.
      */
     @Test
-    void testRegister_Success() throws DataAccessException {
+    void testRegisterSuccess() throws DataAccessException {
         var authData = userService.register("newUser", "password", "new@example.com");
         assertNotNull(authData, "AuthData should not be null on successful registration.");
         assertEquals("newUser", authData.username(), "Username should match.");
@@ -44,7 +44,7 @@ public class UserServiceTest {
      * Negative test: Register a user who already exists.
      */
     @Test
-    void testRegister_AlreadyExists() throws DataAccessException {
+    void testRegisterAlreadyExists() throws DataAccessException {
         userDAO.createUser(new UserData("existingUser", "pw", "ex@example.com"));
         // Attempt to register same username
         assertThrows(DataAccessException.class, () -> {
@@ -56,7 +56,7 @@ public class UserServiceTest {
      * Positive test: Login with correct credentials.
      */
     @Test
-    void testLogin_Success() throws DataAccessException {
+    void testLoginSuccess() throws DataAccessException {
         userService.register("loginUser", "pass123", "login@example.com");
         var authData = userService.login("loginUser", "pass123");
         assertNotNull(authData, "Should return AuthData on successful login.");
@@ -67,7 +67,7 @@ public class UserServiceTest {
      * Negative test: Login with bad credentials.
      */
     @Test
-    void testLogin_InvalidCredentials() throws DataAccessException {
+    void testLoginInvalidCredentials() throws DataAccessException {
         userService.register("userX", "secret", "x@example.com");
         // Wrong password
         assertThrows(DataAccessException.class, () -> {
@@ -79,7 +79,7 @@ public class UserServiceTest {
      * Positive test: Logout with valid token.
      */
     @Test
-    void testLogout_Success() throws DataAccessException {
+    void testLogoutSuccess() throws DataAccessException {
         var authData = userService.register("logoutUser", "pword", "mail@example.com");
         String token = authData.authToken();
 
@@ -93,7 +93,7 @@ public class UserServiceTest {
      * Negative test: Logout with invalid token.
      */
     @Test
-    void testLogout_InvalidToken() {
+    void testLogoutInvalidToken() {
         assertThrows(DataAccessException.class, () -> {
             userService.logout("fakeToken");
         }, "Logging out with non-existent token should throw DataAccessException.");

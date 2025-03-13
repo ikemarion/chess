@@ -7,7 +7,9 @@ import model.UserData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+
 import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 public class AllServiceTests {
@@ -26,17 +28,18 @@ public class AllServiceTests {
         }
 
         @Test
-        void testRegister_Success() throws DataAccessException {
+        void testRegisterSuccess() throws DataAccessException {
             var authData = userService.register("newUser", "password", "new@example.com");
             assertNotNull(authData, "AuthData should not be null on successful registration.");
             assertEquals("newUser", authData.username(), "Username should match.");
+
             UserData stored = userDAO.getUser("newUser");
             assertNotNull(stored, "User should be created in the DAO.");
             assertEquals("new@example.com", stored.email(), "Email should match stored user.");
         }
 
         @Test
-        void testRegister_AlreadyExists() throws DataAccessException {
+        void testRegisterAlreadyExists() throws DataAccessException {
             userDAO.createUser(new UserData("existingUser", "pw", "ex@example.com"));
             assertThrows(DataAccessException.class, () -> {
                 userService.register("existingUser", "newpass", "again@example.com");
@@ -44,7 +47,7 @@ public class AllServiceTests {
         }
 
         @Test
-        void testLogin_Success() throws DataAccessException {
+        void testLoginSuccess() throws DataAccessException {
             userService.register("loginUser", "pass123", "login@example.com");
             var authData = userService.login("loginUser", "pass123");
             assertNotNull(authData, "Should return AuthData on successful login.");
@@ -52,7 +55,7 @@ public class AllServiceTests {
         }
 
         @Test
-        void testLogin_InvalidCredentials() throws DataAccessException {
+        void testLoginInvalidCredentials() throws DataAccessException {
             userService.register("userX", "secret", "x@example.com");
             assertThrows(DataAccessException.class, () -> {
                 userService.login("userX", "wrong");
@@ -60,7 +63,7 @@ public class AllServiceTests {
         }
 
         @Test
-        void testLogout_Success() throws DataAccessException {
+        void testLogoutSuccess() throws DataAccessException {
             var authData = userService.register("logoutUser", "pword", "mail@example.com");
             String token = authData.authToken();
             userService.logout(token);
@@ -68,7 +71,7 @@ public class AllServiceTests {
         }
 
         @Test
-        void testLogout_InvalidToken() {
+        void testLogoutInvalidToken() {
             assertThrows(DataAccessException.class, () -> {
                 userService.logout("fakeToken");
             }, "Logging out with non-existent token should throw DataAccessException.");
@@ -89,25 +92,26 @@ public class AllServiceTests {
         }
 
         @Test
-        void testCreateGame_Success() throws DataAccessException {
+        void testCreateGameSuccess() throws DataAccessException {
             String validToken = "token123";
             authDAO.createAuth(new AuthData(validToken, "userOne"));
             int gameID = gameService.createGame(validToken, "TestGame");
             assertTrue(gameID > 0, "Game ID should be a positive integer.");
+
             GameData storedGame = gameDAO.getGame(gameID);
             assertNotNull(storedGame, "Game should be stored.");
             assertEquals("TestGame", storedGame.gameName(), "Game name should match.");
         }
 
         @Test
-        void testCreateGame_Unauthorized() {
+        void testCreateGameUnauthorized() {
             assertThrows(DataAccessException.class, () -> {
                 gameService.createGame("invalidToken", "ChessGame");
             }, "Creating a game with an invalid token should throw DataAccessException.");
         }
 
         @Test
-        void testListGames_Success() throws DataAccessException {
+        void testListGamesSuccess() throws DataAccessException {
             authDAO.createAuth(new AuthData("listToken", "lister"));
             gameDAO.createGame(new GameData(1, "GameOne", null, null, null));
             gameDAO.createGame(new GameData(2, "GameTwo", null, null, null));
@@ -116,34 +120,36 @@ public class AllServiceTests {
         }
 
         @Test
-        void testListGames_Unauthorized() {
+        void testListGamesUnauthorized() {
             assertThrows(DataAccessException.class, () -> {
                 gameService.listGames("nopeToken");
             }, "Listing games with an invalid token should throw an exception.");
         }
 
         @Test
-        void testJoinGame_Success() throws DataAccessException {
+        void testJoinGameSuccess() throws DataAccessException {
             authDAO.createAuth(new AuthData("joinToken", "joiner"));
             gameDAO.createGame(new GameData(1, "JoinableGame", null, null, null));
             gameService.joinGame("joinToken", "WHITE", 1);
+
             GameData updated = gameDAO.getGame(1);
             assertEquals("joiner", updated.whiteUsername(), "joiner should occupy WHITE spot.");
         }
 
         @Test
-        void testJoinGame_ColorTaken() throws DataAccessException {
+        void testJoinGameColorTaken() throws DataAccessException {
             authDAO.createAuth(new AuthData("firstToken", "userOne"));
             authDAO.createAuth(new AuthData("secondToken", "userTwo"));
             gameDAO.createGame(new GameData(1, "ConflictGame", null, null, null));
             gameService.joinGame("firstToken", "WHITE", 1);
+
             assertThrows(DataAccessException.class, () -> {
                 gameService.joinGame("secondToken", "WHITE", 1);
             }, "Joining a color that's already taken should throw an exception.");
         }
 
         @Test
-        void testJoinGame_InvalidToken() throws DataAccessException {
+        void testJoinGameInvalidToken() throws DataAccessException {
             gameDAO.createGame(new GameData(1, "InvalidTokenGame", null, null, null));
             assertThrows(DataAccessException.class, () -> {
                 gameService.joinGame("bogusToken", "WHITE", 1);
@@ -151,16 +157,17 @@ public class AllServiceTests {
         }
 
         @Test
-        void testJoinGame_InvalidColor() throws DataAccessException {
+        void testJoinGameInvalidColor() throws DataAccessException {
             authDAO.createAuth(new AuthData("colorToken", "colorUser"));
             gameDAO.createGame(new GameData(1, "BadColorGame", null, null, null));
+
             assertThrows(DataAccessException.class, () -> {
                 gameService.joinGame("colorToken", "RED", 1);
             }, "Joining with an invalid color should throw an exception.");
         }
 
         @Test
-        void testJoinGame_NonexistentGame() throws DataAccessException {
+        void testJoinGameNonexistentGame() throws DataAccessException {
             authDAO.createAuth(new AuthData("gameToken", "someUser"));
             assertThrows(DataAccessException.class, () -> {
                 gameService.joinGame("gameToken", "WHITE", 999);
