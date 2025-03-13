@@ -81,17 +81,25 @@ public class GameHandler {
         }
     };
 
+    /**
+     *  UPDATED method: Now checks for "auth token not found" as well,
+     *  returning HTTP 401 in those cases.
+     */
     private void setProperStatus(Response res, String msg) {
         if (msg == null) {
             res.status(400);
             return;
         }
         String lower = msg.toLowerCase();
-        if (lower.contains("unauthorized") || lower.contains("invalid authentication token")) {
+        // If the message includes these substrings, set 401:
+        if (lower.contains("unauthorized")
+                || lower.contains("invalid authentication token")
+                || lower.contains("auth token not found")) {
             res.status(401);
         } else if (lower.contains("already taken")) {
             res.status(403);
         } else {
+            // default to 400 for everything else
             res.status(400);
         }
     }
@@ -108,7 +116,9 @@ public class GameHandler {
 
     private static class GameRequest {
         private String gameName;
-        public String getGameName() { return gameName; }
+        public String getGameName() {
+            return gameName;
+        }
     }
 
     private static class JoinGameRequest {
