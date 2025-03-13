@@ -18,8 +18,7 @@ public class DatabaseManager {
 
     static {
         try {
-            try (var propStream = Thread.currentThread()
-                    .getContextClassLoader()
+            try (var propStream = Thread.currentThread().getContextClassLoader()
                     .getResourceAsStream("db.properties")) {
                 if (propStream == null) {
                     throw new Exception("Unable to load db.properties");
@@ -58,7 +57,6 @@ public class DatabaseManager {
 
     /**
      * Obtain a connection to the database, setting the catalog.
-     * Make sure to close this connection (try-with-resources).
      */
     static Connection getConnection() throws DataAccessException {
         try {
@@ -71,8 +69,9 @@ public class DatabaseManager {
     }
 
     /**
-     * Initializes the DB & tables if they don't exist.
-     * Call this once at the beginning of your server (e.g., in `main`).
+     * Initializes the DB & tables if they don't exist,
+     * and tries to add a UNIQUE constraint for gameName
+     * without dropping existing data.
      */
     public static void initDB() throws DataAccessException {
         createDatabase();
@@ -90,19 +89,13 @@ public class DatabaseManager {
                 stmt.executeUpdate();
             }
 
-            // *DROP* the GAMES table if it exists (so we ensure the new constraints apply)
-            String dropGames = "DROP TABLE IF EXISTS Games";
-            try (PreparedStatement dropStmt = conn.prepareStatement(dropGames)) {
-                dropStmt.executeUpdate();
-            }
-
-            // Now (re)create GAMES with UNIQUE constraint on gameName
+            // GAMES (no DROP TABLE, so data persists)
             String createGames = """
-                CREATE TABLE Games (
+                CREATE TABLE IF NOT EXISTS Games (
                   gameID INT AUTO_INCREMENT PRIMARY KEY,
                   whiteUsername VARCHAR(50),
                   blackUsername VARCHAR(50),
-                  gameName VARCHAR(100) NOT NULL UNIQUE,
+                  gameName VARCHAR(100) NOT NULL,
                   gameJSON TEXT
                 );
             """;
@@ -110,7 +103,19 @@ public class DatabaseManager {
                 stmt.executeUpdate();
             }
 
-            // AUTHTOKENS
+            // Attempt to add a UNIQUE constraint on gameName
+            // If constraint already exists, this might fail silently or throw an error
+            try (PreparedStatement alterStmt = conn.prepareStatement(
+                    "ALTER TABLE Games ADD UNIQUE (gameName)"
+            )) {
+                alterStmt.executeUpdate();
+            } catch (SQLException e) {
+                // If it fails because the index already exists, ignore or log it
+                // You can check error code if you want to handle specifically
+                System.out.println("Note: Could not add UNIQUE constraint on gameName (possibly already exists). " + e.getMessage());
+            }
+
+            // AUTH TOKENS
             String createAuthTokens = """
                 CREATE TABLE IF NOT EXISTS AuthTokens (
                   authToken VARCHAR(255) NOT NULL PRIMARY KEY,
