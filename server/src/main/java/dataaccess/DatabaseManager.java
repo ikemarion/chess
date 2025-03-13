@@ -77,7 +77,6 @@ public class DatabaseManager {
         createDatabase();
 
         try (Connection conn = getConnection()) {
-            // USERS
             String createUsers = """
                 CREATE TABLE IF NOT EXISTS Users (
                   username VARCHAR(50) NOT NULL PRIMARY KEY,
@@ -89,7 +88,6 @@ public class DatabaseManager {
                 stmt.executeUpdate();
             }
 
-            // GAMES (no DROP TABLE, so data persists)
             String createGames = """
                 CREATE TABLE IF NOT EXISTS Games (
                   gameID INT AUTO_INCREMENT PRIMARY KEY,
@@ -103,15 +101,11 @@ public class DatabaseManager {
                 stmt.executeUpdate();
             }
 
-            // Attempt to add a UNIQUE constraint on gameName
-            // If constraint already exists, this might fail silently or throw an error
             try (PreparedStatement alterStmt = conn.prepareStatement(
                     "ALTER TABLE Games ADD UNIQUE (gameName)"
             )) {
                 alterStmt.executeUpdate();
             } catch (SQLException e) {
-                // If it fails because the index already exists, ignore or log it
-                // You can check error code if you want to handle specifically
                 System.out.println("Note: Could not add UNIQUE constraint on gameName (possibly already exists). " + e.getMessage());
             }
 
