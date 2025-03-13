@@ -69,4 +69,51 @@ public class DatabaseManager {
             throw new DataAccessException(e.getMessage());
         }
     }
+
+    public static void initDB() throws DataAccessException {
+        createDatabase(); // Already in your code
+
+        try (Connection conn = getConnection()) {
+            // Users table
+            String createUsers = """
+            CREATE TABLE IF NOT EXISTS Users (
+              username VARCHAR(50) NOT NULL PRIMARY KEY,
+              password VARCHAR(60) NOT NULL,
+              email VARCHAR(100) DEFAULT NULL
+            );
+        """;
+            try (PreparedStatement stmt = conn.prepareStatement(createUsers)) {
+                stmt.executeUpdate();
+            }
+
+            // Games table
+            String createGames = """
+            CREATE TABLE IF NOT EXISTS Games (
+              gameID INT AUTO_INCREMENT PRIMARY KEY,
+              whiteUsername VARCHAR(50),
+              blackUsername VARCHAR(50),
+              gameName VARCHAR(100),
+              gameJSON TEXT
+            );
+        """;
+            try (PreparedStatement stmt = conn.prepareStatement(createGames)) {
+                stmt.executeUpdate();
+            }
+
+            // AuthTokens table
+            String createAuthTokens = """
+            CREATE TABLE IF NOT EXISTS AuthTokens (
+              authToken VARCHAR(255) NOT NULL PRIMARY KEY,
+              username VARCHAR(50) NOT NULL
+            );
+        """;
+            try (PreparedStatement stmt = conn.prepareStatement(createAuthTokens)) {
+                stmt.executeUpdate();
+            }
+
+        } catch (SQLException e) {
+            throw new DataAccessException("Error creating tables: " + e.getMessage());
+        }
+    }
+
 }
