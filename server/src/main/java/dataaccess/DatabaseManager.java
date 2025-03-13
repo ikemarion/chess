@@ -1,25 +1,31 @@
 package dataaccess;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.Properties;
 
+/**
+ * Manages database creation & connections.
+ * Make sure you call initDB() once when your server starts up.
+ */
 public class DatabaseManager {
     private static final String DATABASE_NAME;
     private static final String USER;
     private static final String PASSWORD;
     private static final String CONNECTION_URL;
 
-    /*
-     * Load the database information for the db.properties file.
-     */
     static {
         try {
-            try (var propStream = Thread.currentThread().getContextClassLoader().getResourceAsStream("db.properties")) {
+            try (var propStream = Thread.currentThread().getContextClassLoader()
+                    .getResourceAsStream("db.properties")) {
                 if (propStream == null) {
                     throw new Exception("Unable to load db.properties");
                 }
                 Properties props = new Properties();
                 props.load(propStream);
+
                 DATABASE_NAME = props.getProperty("db.name");
                 USER = props.getProperty("db.user");
                 PASSWORD = props.getProperty("db.password");
@@ -29,7 +35,7 @@ public class DatabaseManager {
                 CONNECTION_URL = String.format("jdbc:mysql://%s:%d", host, port);
             }
         } catch (Exception ex) {
-            throw new RuntimeException("unable to process db.properties. " + ex.getMessage());
+            throw new RuntimeException("Unable to process db.properties. " + ex.getMessage());
         }
     }
 
@@ -49,16 +55,8 @@ public class DatabaseManager {
     }
 
     /**
-     * Create a connection to the database and sets the catalog based upon the
-     * properties specified in db.properties. Connections to the database should
-     * be short-lived, and you must close the connection when you are done with it.
-     * The easiest way to do that is with a try-with-resource block.
-     * <br/>
-     * <code>
-     * try (var conn = DbInfo.getConnection(databaseName)) {
-     * // execute SQL statements.
-     * }
-     * </code>
+     * Obtain a connection to the database, setting the catalog.
+     * Make sure to close this connection (try-with-resources).
      */
     static Connection getConnection() throws DataAccessException {
         try {
@@ -70,43 +68,47 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * Initializes the DB & tables if they don't exist.
+     * Call this once at the beginning of your server (e.g., in `main`).
+     */
     public static void initDB() throws DataAccessException {
-        createDatabase(); // Already in your code
+        createDatabase();
 
         try (Connection conn = getConnection()) {
-            // Users table
+            // USERS table
             String createUsers = """
-            CREATE TABLE IF NOT EXISTS Users (
-              username VARCHAR(50) NOT NULL PRIMARY KEY,
-              password VARCHAR(60) NOT NULL,
-              email VARCHAR(100) DEFAULT NULL
-            );
-        """;
+                CREATE TABLE IF NOT EXISTS Users (
+                  username VARCHAR(50) NOT NULL PRIMARY KEY,
+                  password VARCHAR(60) NOT NULL,
+                  email VARCHAR(100) DEFAULT NULL
+                );
+            """;
             try (PreparedStatement stmt = conn.prepareStatement(createUsers)) {
                 stmt.executeUpdate();
             }
 
-            // Games table
+            // GAMES table, with UNIQUE constraint on gameName
             String createGames = """
-            CREATE TABLE IF NOT EXISTS Games (
-              gameID INT AUTO_INCREMENT PRIMARY KEY,
-              whiteUsername VARCHAR(50),
-              blackUsername VARCHAR(50),
-              gameName VARCHAR(100),
-              gameJSON TEXT
-            );
-        """;
+                CREATE TABLE IF NOT EXISTS Games (
+                  gameID INT AUTO_INCREMENT PRIMARY KEY,
+                  whiteUsername VARCHAR(50),
+                  blackUsername VARCHAR(50),
+                  gameName VARCHAR(100) NOT NULL UNIQUE,  -- unique constraint here
+                  gameJSON TEXT
+                );
+            """;
             try (PreparedStatement stmt = conn.prepareStatement(createGames)) {
                 stmt.executeUpdate();
             }
 
-            // AuthTokens table
+            // AUTHTOKENS table
             String createAuthTokens = """
-            CREATE TABLE IF NOT EXISTS AuthTokens (
-              authToken VARCHAR(255) NOT NULL PRIMARY KEY,
-              username VARCHAR(50) NOT NULL
-            );
-        """;
+                CREATE TABLE IF NOT EXISTS AuthTokens (
+                  authToken VARCHAR(255) NOT NULL PRIMARY KEY,
+                  username VARCHAR(50) NOT NULL
+                );
+            """;
             try (PreparedStatement stmt = conn.prepareStatement(createAuthTokens)) {
                 stmt.executeUpdate();
             }
@@ -115,5 +117,4 @@ public class DatabaseManager {
             throw new DataAccessException("Error creating tables: " + e.getMessage());
         }
     }
-
 }
