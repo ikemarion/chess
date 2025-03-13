@@ -33,16 +33,16 @@ public class MySQLUserDAO implements UserDAO {
 
     @Override
     public void createUser(UserData user) throws DataAccessException {
-        // If hashing: String hashed = BCrypt.hashpw(user.password(), BCrypt.gensalt());
-        // Then store 'hashed' instead of user.password() below.
+        // 1) Generate a salted hash of the user’s plain-text password
+        String hashedPW = BCrypt.hashpw(user.password(), BCrypt.gensalt());
 
+        // 2) Insert into the database
         String sql = "INSERT INTO Users (username, password, email) VALUES (?, ?, ?)";
-
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setString(1, user.username());
-            stmt.setString(2, user.password());
+            stmt.setString(2, hashedPW); // store hashed, not plain text
             stmt.setString(3, user.email());
 
             stmt.executeUpdate();
@@ -52,16 +52,16 @@ public class MySQLUserDAO implements UserDAO {
     }
 
     @Override
-    public boolean authenticateUser(String username, String password) throws DataAccessException {
-        UserData user = getUser(username);
-        if (user == null) {
-            return false;
+    public boolean authenticateUser(String username, String plainPassword) throws DataAccessException {
+        // Get the user from DB:
+        UserData storedUser = getUser(username);
+        if (storedUser == null) {
+            return false; // no such user
         }
 
-        // If hashing:
-        // return BCrypt.checkpw(password, user.password());
-        // Otherwise (plain text):
-        return user.password().equals(password);
+        // storedUser.password() is the hashed password read from DB
+        String hashedPW = storedUser.password();
+        return BCrypt.checkpw(plainPassword, hashedPW);
     }
 
     @Override

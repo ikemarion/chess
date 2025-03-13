@@ -14,11 +14,11 @@ public class InMemoryAuthDAO implements AuthDAO {
 
     @Override
     public AuthData getAuth(String authToken) throws DataAccessException {
-        if (!authTokens.containsKey(authToken)) {
-            throw new DataAccessException("Invalid authentication token");
-        }
+        // Return null if the token doesn't exist
         return authTokens.get(authToken);
+        // This automatically returns null if the key isn't in the map
     }
+
 
     @Override
     public void deleteAuth(String authToken) throws DataAccessException {
