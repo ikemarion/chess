@@ -18,7 +18,8 @@ public class DatabaseManager {
 
     static {
         try {
-            try (var propStream = Thread.currentThread().getContextClassLoader()
+            try (var propStream = Thread.currentThread()
+                    .getContextClassLoader()
                     .getResourceAsStream("db.properties")) {
                 if (propStream == null) {
                     throw new Exception("Unable to load db.properties");
@@ -44,9 +45,10 @@ public class DatabaseManager {
      */
     static void createDatabase() throws DataAccessException {
         try {
-            var statement = "CREATE DATABASE IF NOT EXISTS " + DATABASE_NAME;
-            var conn = DriverManager.getConnection(CONNECTION_URL, USER, PASSWORD);
-            try (var preparedStatement = conn.prepareStatement(statement)) {
+            String statement = "CREATE DATABASE IF NOT EXISTS " + DATABASE_NAME;
+            try (var conn = DriverManager.getConnection(CONNECTION_URL, USER, PASSWORD);
+                 var preparedStatement = conn.prepareStatement(statement)) {
+
                 preparedStatement.executeUpdate();
             }
         } catch (SQLException e) {
@@ -76,7 +78,7 @@ public class DatabaseManager {
         createDatabase();
 
         try (Connection conn = getConnection()) {
-            // USERS table
+            // USERS
             String createUsers = """
                 CREATE TABLE IF NOT EXISTS Users (
                   username VARCHAR(50) NOT NULL PRIMARY KEY,
@@ -88,13 +90,19 @@ public class DatabaseManager {
                 stmt.executeUpdate();
             }
 
-            // GAMES table, with UNIQUE constraint on gameName
+            // *DROP* the GAMES table if it exists (so we ensure the new constraints apply)
+            String dropGames = "DROP TABLE IF EXISTS Games";
+            try (PreparedStatement dropStmt = conn.prepareStatement(dropGames)) {
+                dropStmt.executeUpdate();
+            }
+
+            // Now (re)create GAMES with UNIQUE constraint on gameName
             String createGames = """
-                CREATE TABLE IF NOT EXISTS Games (
+                CREATE TABLE Games (
                   gameID INT AUTO_INCREMENT PRIMARY KEY,
                   whiteUsername VARCHAR(50),
                   blackUsername VARCHAR(50),
-                  gameName VARCHAR(100) NOT NULL UNIQUE,  -- unique constraint here
+                  gameName VARCHAR(100) NOT NULL UNIQUE,
                   gameJSON TEXT
                 );
             """;
@@ -102,7 +110,7 @@ public class DatabaseManager {
                 stmt.executeUpdate();
             }
 
-            // AUTHTOKENS table
+            // AUTHTOKENS
             String createAuthTokens = """
                 CREATE TABLE IF NOT EXISTS AuthTokens (
                   authToken VARCHAR(255) NOT NULL PRIMARY KEY,

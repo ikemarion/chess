@@ -9,7 +9,8 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * A "revised" MySQLGameDAOTest where our "negative" test simply doesn't expect an exception.
+ * Final MySQLGameDAOTest that expects an exception
+ * for duplicate gameName if 'UNIQUE' is enforced in the DB.
  */
 public class MySQLGameDAOTest {
 
@@ -17,43 +18,35 @@ public class MySQLGameDAOTest {
 
     @BeforeEach
     void setup() throws DataAccessException {
-        // Create DB / tables if not exist
-        DatabaseManager.initDB();
-
-        // Instantiate the DAO & clear table
+        DatabaseManager.initDB();  // Make sure 'gameName' is UNIQUE in the DB schema
         gameDAO = new MySQLGameDAO();
-        gameDAO.clear();
+        gameDAO.clear(); // Clear the table before each test
     }
 
     @Test
     void createGamePositive() throws DataAccessException {
-        // Insert a valid game
         GameData game = new GameData(0, "whiteUser", "blackUser", "TestGame", null);
         int newID = gameDAO.createGame(game);
 
-        assertTrue(newID > 0, "Should return a generated gameID > 0.");
-
-        // Verify the game was indeed created
+        assertTrue(newID > 0, "Should return an auto-generated gameID > 0.");
         GameData fetched = gameDAO.getGame(newID);
-        assertNotNull(fetched, "GameData should be retrievable after creation.");
-        assertEquals("TestGame", fetched.gameName(), "Game name should match inserted value.");
+        assertNotNull(fetched, "GameData should be retrievable.");
+        assertEquals("TestGame", fetched.gameName());
     }
 
     /**
-     * "Negative" test that does NOT expect an exception.
-     * We insert duplicate game names. Since the DB doesn't enforce uniqueness,
-     * we'll just confirm it doesn't crash or throw.
+     * Negative: Attempt to create a second game with the same name => expect DataAccessException.
+     * Only valid if 'gameName' is UNIQUE in your DB table definition.
      */
     @Test
     void createGameNegativeDuplicateName() throws DataAccessException {
-        // First insertion
-        gameDAO.createGame(new GameData(0, "white", "black", "SameName", null));
-        // Duplicate insertion - in a real "negative" scenario, you'd expect an exception,
-        // but here we just confirm it doesn't blow up.
-        int newID = gameDAO.createGame(new GameData(0, "white2", "black2", "SameName", null));
+        // First insert
+        gameDAO.createGame(new GameData(0, "white", "black", "UniqueName", null));
 
-        // Confirm second game was created successfully (no error thrown)
-        assertTrue(newID > 0, "Even with 'duplicate' name, no exception was thrown, so it 'passes' under current logic.");
+        // Second insert with same name => must throw DataAccessException
+        assertThrows(DataAccessException.class, () -> {
+            gameDAO.createGame(new GameData(0, "white2", "black2", "UniqueName", null));
+        }, "Inserting a duplicate gameName should fail if the DB has UNIQUE constraint on gameName.");
     }
 
     @Test
@@ -68,17 +61,17 @@ public class MySQLGameDAOTest {
 
     @Test
     void getGameNegativeNotFound() {
-        // 9999 presumably doesn't exist
+        // 9999 presumably doesn't exist in DB
         assertThrows(DataAccessException.class, () -> {
             gameDAO.getGame(9999);
-        }, "Fetching a non-existent gameID should throw an exception.");
+        }, "Fetching a non-existent gameID should throw DataAccessException.");
     }
 
     @Test
     void listGamesPositive() throws DataAccessException {
         // Insert multiple games
-        gameDAO.createGame(new GameData(0, "w1", "b1", "NameOne", null));
-        gameDAO.createGame(new GameData(0, "w2", "b2", "NameTwo", null));
+        gameDAO.createGame(new GameData(0, "w1", "b1", "GameOne", null));
+        gameDAO.createGame(new GameData(0, "w2", "b2", "GameTwo", null));
 
         List<GameData> all = gameDAO.listGames();
         assertEquals(2, all.size(), "Should list exactly 2 games.");
@@ -86,18 +79,18 @@ public class MySQLGameDAOTest {
 
     @Test
     void updateGamePositive() throws DataAccessException {
-        int gameId = gameDAO.createGame(new GameData(0, "whiteGuy", "blackGuy", "OriginalName", null));
-        GameData updatedGame = new GameData(gameId, "whiteGuy", "blackGuy", "RenamedGame", null);
+        int gameId = gameDAO.createGame(new GameData(0, "whiteGuy", "blackGuy", "Original", null));
+        GameData updatedGame = new GameData(gameId, "whiteGuy", "blackGuy", "Renamed", null);
 
         gameDAO.updateGame(updatedGame);
         GameData fetched = gameDAO.getGame(gameId);
-        assertEquals("RenamedGame", fetched.gameName(), "Game name should be updated in DB.");
+        assertEquals("Renamed", fetched.gameName(), "Game name should be updated in DB.");
     }
 
     @Test
     void updateGameNegativeNoSuchGame() {
         // Attempting to update a gameID that doesn't exist
-        GameData phantom = new GameData(9999, "wTeam", "bTeam", "PhantomGame", null);
+        GameData phantom = new GameData(9999, "wTeam", "bTeam", "Phantom", null);
         assertThrows(DataAccessException.class, () -> {
             gameDAO.updateGame(phantom);
         }, "Updating a non-existent gameID should throw an exception.");
