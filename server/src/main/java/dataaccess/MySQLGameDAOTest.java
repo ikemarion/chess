@@ -4,8 +4,9 @@ import model.GameData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 public class MySQLGameDAOTest {
 
@@ -14,6 +15,7 @@ public class MySQLGameDAOTest {
     @BeforeEach
     void setup() throws DataAccessException {
         DatabaseManager.initDB();
+
         gameDAO = new MySQLGameDAO();
         gameDAO.clear();
     }
@@ -23,33 +25,38 @@ public class MySQLGameDAOTest {
         GameData game = new GameData(0, "whiteUser", "blackUser", "TestGame", null);
         int newID = gameDAO.createGame(game);
 
-        assertTrue(newID > 0, "Should return generated ID > 0.");
+        assertTrue(newID > 0, "Should return a generated gameID > 0.");
+
         GameData fetched = gameDAO.getGame(newID);
-        assertNotNull(fetched, "Game should be retrievable after creation.");
-        assertEquals("TestGame", fetched.gameName());
+        assertNotNull(fetched, "GameData should be retrievable after creation.");
+        assertEquals("TestGame", fetched.gameName(), "Game name should match inserted value.");
     }
 
+
     @Test
-    void createGameNegativeInvalidData() {
-        GameData invalid = new GameData(0, null, null, null, null);
+    void createGameNegativeNullName() {
+        GameData invalidGame = new GameData(0, "white", "black", null, null);
+
         assertThrows(DataAccessException.class, () -> {
-            gameDAO.createGame(invalid);
-        }, "Creating a game with invalid data should throw.");
+            gameDAO.createGame(invalidGame);
+        }, "Creating a game with a null name (NOT NULL in DB) should throw an exception.");
     }
 
     @Test
     void getGamePositive() throws DataAccessException {
-        int id = gameDAO.createGame(new GameData(0, "white", "black", "CoolGame", null));
-        GameData fetched = gameDAO.getGame(id);
-        assertNotNull(fetched);
+        int createdID = gameDAO.createGame(new GameData(0, "wPlayer", "bPlayer", "CoolGame", null));
+        GameData fetched = gameDAO.getGame(createdID);
+
+        assertNotNull(fetched, "Should retrieve the newly inserted game.");
         assertEquals("CoolGame", fetched.gameName());
+        assertEquals("wPlayer", fetched.whiteUsername());
     }
 
     @Test
     void getGameNegativeNotFound() {
         assertThrows(DataAccessException.class, () -> {
             gameDAO.getGame(9999);
-        }, "Fetching a non-existent gameID should throw DataAccessException or your design's approach.");
+        }, "Fetching a non-existent gameID should throw an exception.");
     }
 
     @Test
@@ -63,25 +70,25 @@ public class MySQLGameDAOTest {
 
     @Test
     void updateGamePositive() throws DataAccessException {
-        int gameId = gameDAO.createGame(new GameData(0, "w1", "b1", "Original", null));
-        GameData updated = new GameData(gameId, "w1", "b1", "RenamedGame", null);
+        int gameId = gameDAO.createGame(new GameData(0, "whiteGuy", "blackGuy", "OriginalName", null));
+        GameData updatedGame = new GameData(gameId, "whiteGuy", "blackGuy", "RenamedGame", null);
 
-        gameDAO.updateGame(updated);
+        gameDAO.updateGame(updatedGame);
         GameData fetched = gameDAO.getGame(gameId);
-        assertEquals("RenamedGame", fetched.gameName(), "Game name should be updated.");
+        assertEquals("RenamedGame", fetched.gameName(), "Game name should be updated in DB.");
     }
 
     @Test
     void updateGameNegativeNoSuchGame() {
-        GameData phantom = new GameData(9999, "w", "b", "Phantom", null);
+        GameData phantom = new GameData(9999, "wTeam", "bTeam", "PhantomGame", null);
         assertThrows(DataAccessException.class, () -> {
             gameDAO.updateGame(phantom);
-        }, "Updating a non-existent game should throw an exception.");
+        }, "Updating a non-existent gameID should throw an exception.");
     }
 
     @Test
     void clearPositive() throws DataAccessException {
-        gameDAO.createGame(new GameData(0, "w", "b", "WillClear", null));
+        gameDAO.createGame(new GameData(0, "white", "black", "WillBeCleared", null));
         gameDAO.clear();
 
         List<GameData> all = gameDAO.listGames();
