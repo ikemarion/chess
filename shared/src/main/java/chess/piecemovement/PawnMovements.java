@@ -22,30 +22,57 @@ public class PawnMovements implements MovementCalculator {
         // Pawns move "up" for WHITE, "down" for BLACK
         int pawnDir = (color == ChessGame.TeamColor.WHITE) ? 1 : -1;
 
-        // 1) Straight forward by 1
+        // 1) Move forward by 1
         int newRow = position.getRow() + pawnDir;
         int newCol = position.getColumn();
         ChessPosition endPos = new ChessPosition(newRow, newCol);
 
-        if (MovementCalculator.boundaryCheck(endPos)
-                && board.getPiece(endPos) == null) {
-
+        if (MovementCalculator.boundaryCheck(endPos) && board.getPiece(endPos) == null) {
             // Promotion if we reach last rank
-            if ((pawnDir == 1 && newRow == 8) || (pawnDir == -1 && newRow == 1)) {
+            if (reachedPromotionRank(pawnDir, newRow)) {
                 addPromotionMoves(position, endPos, output);
             } else {
                 output.add(new ChessMove(position, endPos, null));
             }
         }
 
-        // 2) Move 2 squares if on starting rank
-        if ((pawnDir == 1 && position.getRow() == 2)
-                || (pawnDir == -1 && position.getRow() == 7)) {
+        // 2) Move forward by 2 if on starting rank
+        maybeMoveTwoSquares(position, board, pawnDir, output);
 
-            int rowAhead1 = position.getRow() + pawnDir;
-            int rowAhead2 = position.getRow() + (pawnDir * 2);
-            ChessPosition pos1 = new ChessPosition(rowAhead1, newCol);
-            ChessPosition pos2 = new ChessPosition(rowAhead2, newCol);
+        // 3) Capture diagonally left
+        tryPawnCapture(position, board, pawnDir,
+                position.getRow() + pawnDir, position.getColumn() - 1, output);
+
+        // 4) Capture diagonally right
+        tryPawnCapture(position, board, pawnDir,
+                position.getRow() + pawnDir, position.getColumn() + 1, output);
+
+        return output;
+    }
+
+    /**
+     * Checks if row is last rank for the given pawnDir.
+     */
+    private static boolean reachedPromotionRank(int pawnDir, int row) {
+        return (pawnDir == 1 && row == 8) || (pawnDir == -1 && row == 1);
+    }
+
+    /**
+     * Attempt to move forward by 2 squares if on the starting rank.
+     */
+    private static void maybeMoveTwoSquares(ChessPosition position,
+                                            ChessBoard board,
+                                            int pawnDir,
+                                            HashSet<ChessMove> output) {
+        int row = position.getRow();
+        int col = position.getColumn();
+
+        // White can move 2 from row = 2, Black can move 2 from row = 7
+        if ((pawnDir == 1 && row == 2) || (pawnDir == -1 && row == 7)) {
+            int rowAhead1 = row + pawnDir;
+            int rowAhead2 = row + (pawnDir * 2);
+            ChessPosition pos1 = new ChessPosition(rowAhead1, col);
+            ChessPosition pos2 = new ChessPosition(rowAhead2, col);
 
             if (MovementCalculator.boundaryCheck(pos1)
                     && MovementCalculator.boundaryCheck(pos2)
@@ -55,45 +82,39 @@ public class PawnMovements implements MovementCalculator {
                 output.add(new ChessMove(position, pos2, null));
             }
         }
-
-        // 3) Capture diagonally (left)
-        newRow = position.getRow() + pawnDir;
-        newCol = position.getColumn() - 1;
-        endPos = new ChessPosition(newRow, newCol);
-
-        if (MovementCalculator.boundaryCheck(endPos)
-                && board.getPiece(endPos) != null
-                && board.getPiece(endPos).getTeamColor() != color) {
-
-            // If promotion
-            if ((pawnDir == 1 && newRow == 8) || (pawnDir == -1 && newRow == 1)) {
-                addPromotionMoves(position, endPos, output);
-            } else {
-                output.add(new ChessMove(position, endPos, null));
-            }
-        }
-
-        // 4) Capture diagonally (right)
-        newRow = position.getRow() + pawnDir;
-        newCol = position.getColumn() + 1;
-        endPos = new ChessPosition(newRow, newCol);
-
-        if (MovementCalculator.boundaryCheck(endPos)
-                && board.getPiece(endPos) != null
-                && board.getPiece(endPos).getTeamColor() != color) {
-
-            if ((pawnDir == 1 && newRow == 8) || (pawnDir == -1 && newRow == 1)) {
-                addPromotionMoves(position, endPos, output);
-            } else {
-                output.add(new ChessMove(position, endPos, null));
-            }
-        }
-
-        return output;
     }
 
     /**
-     * Helper to add promotion moves for Pawn -> Knight/Rook/Bishop/Queen
+     * Attempt to capture diagonally. If there's an opponent piece, add capture or promotion.
+     */
+    private static void tryPawnCapture(ChessPosition startPos,
+                                       ChessBoard board,
+                                       int pawnDir,
+                                       int targetRow,
+                                       int targetCol,
+                                       HashSet<ChessMove> output) {
+
+        if (!MovementCalculator.boundaryCheck(new ChessPosition(targetRow, targetCol))) {
+            return;
+        }
+        ChessPiece piece = board.getPiece(startPos);
+        ChessPiece target = board.getPiece(new ChessPosition(targetRow, targetCol));
+        if (piece == null || target == null) {
+            return;
+        }
+        // Capture if opposing color
+        if (target.getTeamColor() != piece.getTeamColor()) {
+            ChessPosition endPos = new ChessPosition(targetRow, targetCol);
+            if (reachedPromotionRank(pawnDir, targetRow)) {
+                addPromotionMoves(startPos, endPos, output);
+            } else {
+                output.add(new ChessMove(startPos, endPos, null));
+            }
+        }
+    }
+
+    /**
+     * Helper to add promotion moves for Pawn -> Knight/Rook/Bishop/Queen.
      */
     private static void addPromotionMoves(ChessPosition start,
                                           ChessPosition end,
