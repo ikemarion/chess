@@ -19,20 +19,20 @@ public class ServerFacade {
         this.baseUrl = "http://localhost:" + port;
     }
 
-    public void clearDB() throws Exception {
-        URL url = new URL(baseUrl + "/db");
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod("DELETE");
-
-        int status = conn.getResponseCode();
-        if (status == 200) {
-            conn.disconnect();
-        } else {
-            String err = readError(conn);
-            conn.disconnect();
-            throw new Exception("clearDB failed: " + err);
-        }
-    }
+//    public void clearDB() throws Exception {
+//        URL url = new URL(baseUrl + "/db");
+//        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+//        conn.setRequestMethod("DELETE");
+//
+//        int status = conn.getResponseCode();
+//        if (status == 200) {
+//            conn.disconnect();
+//        } else {
+//            String err = readError(conn);
+//            conn.disconnect();
+//            throw new Exception("clearDB failed: " + err);
+//        }
+//    }
 
     //Register
     public AuthData register(String username, String password, String email) throws Exception {
