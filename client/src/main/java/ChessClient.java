@@ -1,26 +1,21 @@
+import model.AuthData;
+import model.GameData;
+
+import java.util.HashMap;
+import java.util.List;
 import java.util.Scanner;
 
-/**
- * A console-based client that:
- * - Prelogin: help, login, register, quit
- * - Postlogin: help, logout, create game, list games, play game, observe game
- */
 public class ChessClient {
     private final Scanner inputScanner = new Scanner(System.in);
-    private final ServerFacade facade;
+    private final ServerFacade facade = new ServerFacade(8080); // Change port if needed
 
-    // Track login state
     private boolean loggedIn = false;
-    // Track current auth token for server calls
     private String authToken = null;
+    private String username = null;
 
-    public ChessClient(ServerFacade facade) {
-        this.facade = facade;
-    }
+    // Maps game # to actual game ID
+    private HashMap<Integer, Integer> gameIndexToId = new HashMap<>();
 
-    /**
-     * Main loop: if loggedOut => handlePrelogin, else handlePostlogin.
-     */
     public void start() {
         System.out.println("Welcome to Chess Client! Type 'help' for commands.");
         while (true) {
@@ -31,34 +26,35 @@ public class ChessClient {
                     handlePostlogin();
                 }
             } catch (Exception e) {
-                // Catch any unexpected exceptions so client doesn't crash
                 System.out.println("Error: " + e.getMessage());
             }
         }
     }
 
-    // ============================
-    // PRELOGIN UI
-    // ============================
     private void handlePrelogin() {
         System.out.print("prelogin> ");
         String commandLine = inputScanner.nextLine().trim().toLowerCase();
         switch (commandLine) {
-            case "help":
-                showPreloginHelp();
-                break;
-            case "login":
-                doLogin();
-                break;
-            case "register":
-                doRegister();
-                break;
-            case "quit":
-                System.out.println("Goodbye!");
-                System.exit(0);
-                break;
-            default:
-                System.out.println("Unknown command: " + commandLine);
+            case "help" -> showPreloginHelp();
+            case "login" -> doLogin();
+            case "register" -> doRegister();
+            case "quit" -> quit();
+            default -> System.out.println("Unknown command: " + commandLine);
+        }
+    }
+
+    private void handlePostlogin() {
+        System.out.print("postlogin> ");
+        String commandLine = inputScanner.nextLine().trim().toLowerCase();
+        switch (commandLine) {
+            case "help" -> showPostloginHelp();
+            case "logout" -> doLogout();
+            case "create game" -> doCreateGame();
+            case "list games" -> doListGames();
+            case "play game" -> doPlayGame();
+            case "observe game" -> doObserveGame();
+            case "quit" -> quit();
+            default -> System.out.println("Unknown command: " + commandLine);
         }
     }
 
@@ -72,15 +68,16 @@ public class ChessClient {
 
     private void doLogin() {
         System.out.print("Username: ");
-        String username = inputScanner.nextLine().trim();
+        String user = inputScanner.nextLine().trim();
         System.out.print("Password: ");
-        String password = inputScanner.nextLine().trim();
+        String pass = inputScanner.nextLine().trim();
 
         try {
-            var auth = facade.login(username, password);
-            authToken = auth.authToken();
-            loggedIn = true;
-            System.out.println("Logged in as: " + auth.username());
+            AuthData data = facade.login(user, pass);
+            this.authToken = data.authToken();
+            this.username = data.username();
+            this.loggedIn = true;
+            System.out.println("Logged in as " + username);
         } catch (Exception e) {
             System.out.println("Login failed: " + e.getMessage());
         }
@@ -88,73 +85,30 @@ public class ChessClient {
 
     private void doRegister() {
         System.out.print("Username: ");
-        String username = inputScanner.nextLine().trim();
+        String user = inputScanner.nextLine().trim();
         System.out.print("Password: ");
-        String password = inputScanner.nextLine().trim();
+        String pass = inputScanner.nextLine().trim();
         System.out.print("Email: ");
         String email = inputScanner.nextLine().trim();
 
         try {
-            var auth = facade.register(username, password, email);
-            authToken = auth.authToken();
-            loggedIn = true;
-            System.out.println("Registered & logged in as: " + auth.username());
+            AuthData data = facade.register(user, pass, email);
+            this.authToken = data.authToken();
+            this.username = data.username();
+            this.loggedIn = true;
+            System.out.println("Registered and logged in as " + username);
         } catch (Exception e) {
-            System.out.println("Registration failed: " + e.getMessage());
+            System.out.println("Register failed: " + e.getMessage());
         }
-    }
-
-    // ============================
-    // POSTLOGIN UI
-    // ============================
-    private void handlePostlogin() {
-        System.out.print("postlogin> ");
-        String commandLine = inputScanner.nextLine().trim().toLowerCase();
-        switch (commandLine) {
-            case "help":
-                showPostloginHelp();
-                break;
-            case "logout":
-                doLogout();
-                break;
-            case "create game":
-                doCreateGame();
-                break;
-            case "list games":
-                doListGames();
-                break;
-            case "play game":
-                doPlayGame();
-                break;
-            case "observe game":
-                doObserveGame();
-                break;
-            case "quit":
-                System.out.println("Goodbye!");
-                System.exit(0);
-                break;
-            default:
-                System.out.println("Unknown command: " + commandLine);
-        }
-    }
-
-    private void showPostloginHelp() {
-        System.out.println("Postlogin commands:");
-        System.out.println("  help          - Show this menu");
-        System.out.println("  logout        - Logout of your current account");
-        System.out.println("  create game   - Create a new game in the server");
-        System.out.println("  list games    - List existing games on the server");
-        System.out.println("  play game     - Join a game by number + color");
-        System.out.println("  observe game  - Observe a game by number (white perspective)");
-        System.out.println("  quit          - Exit the program");
     }
 
     private void doLogout() {
         try {
             facade.logout(authToken);
-            loggedIn = false;
             authToken = null;
-            System.out.println("Logged out successfully.");
+            username = null;
+            loggedIn = false;
+            System.out.println("Logged out.");
         } catch (Exception e) {
             System.out.println("Logout failed: " + e.getMessage());
         }
@@ -174,20 +128,22 @@ public class ChessClient {
 
     private void doListGames() {
         try {
-            var games = facade.listGames(authToken);
+            List<GameData> games = facade.listGames(authToken);
+            gameIndexToId.clear();
+
             if (games.isEmpty()) {
-                System.out.println("No games found on server.");
-            } else {
-                System.out.println("Games on server:");
-                // We'll number them for the user
-                int index = 1;
-                for (var g : games) {
-                    String white = g.whiteUsername() == null ? "-" : g.whiteUsername();
-                    String black = g.blackUsername() == null ? "-" : g.blackUsername();
-                    System.out.println(index + ") " + g.gameName()
-                            + " (white=" + white + ", black=" + black + ")");
-                    index++;
-                }
+                System.out.println("No games found.");
+                return;
+            }
+
+            for (int i = 0; i < games.size(); i++) {
+                GameData g = games.get(i);
+                int index = i + 1;
+                gameIndexToId.put(index, g.gameID());
+
+                String white = g.whiteUsername() != null ? g.whiteUsername() : "...";
+                String black = g.blackUsername() != null ? g.blackUsername() : "...";
+                System.out.printf("%d) %s (white=%s, black=%s)%n", index, g.gameName(), white, black);
             }
         } catch (Exception e) {
             System.out.println("List games failed: " + e.getMessage());
@@ -195,108 +151,81 @@ public class ChessClient {
     }
 
     private void doPlayGame() {
-        System.out.print("Which game number do you want to join? ");
-        String choice = inputScanner.nextLine().trim();
-        int gameNumber;
-        try {
-            gameNumber = Integer.parseInt(choice);
-        } catch (NumberFormatException e) {
-            System.out.println("Invalid number. Try again.");
-            return;
-        }
+        int gameId = promptGameNumber();
+        if (gameId == -1) return;
+
         System.out.print("What color? [white/black]: ");
-        String color = inputScanner.nextLine().trim().toLowerCase();
-        if (!color.equals("white") && !color.equals("black")) {
-            System.out.println("Invalid color. Must be 'white' or 'black'.");
+        String color = inputScanner.nextLine().trim().toUpperCase();
+
+        if (!color.equals("WHITE") && !color.equals("BLACK")) {
+            System.out.println("Invalid color.");
             return;
         }
 
-        // We'll need to map the gameNumber the user typed to the actual gameID
-        // so we must do facade.listGames(...) again or keep a cached list
         try {
-            var games = facade.listGames(authToken);
-            if (gameNumber < 1 || gameNumber > games.size()) {
-                System.out.println("No such game index: " + gameNumber);
-                return;
-            }
-            var chosenGame = games.get(gameNumber - 1);
-            int gameID = chosenGame.gameID();
-
-            facade.joinGame(authToken, gameID, color);
-            System.out.println("Joined game #" + gameNumber + " (" + chosenGame.gameName()
-                    + ") as " + color + ".");
-            // Now draw the board from that perspective
-            drawBoard(color.equals("white"));
+            facade.joinGame(authToken, gameId, color);
+            drawBoard(color.equals("WHITE"));
         } catch (Exception e) {
-            System.out.println("Play game failed: " + e.getMessage());
+            System.out.println("Join failed: " + e.getMessage());
         }
     }
 
     private void doObserveGame() {
-        System.out.print("Which game number to observe? ");
-        String choice = inputScanner.nextLine().trim();
-        int gameNumber;
-        try {
-            gameNumber = Integer.parseInt(choice);
-        } catch (NumberFormatException e) {
-            System.out.println("Invalid number. Try again.");
-            return;
-        }
+        int gameId = promptGameNumber();
+        if (gameId == -1) return;
 
-        // We'll not actually call a separate endpoint,
-        // just treat it as "observer sees from white perspective"
-        // but you might do facade.observeGame(...) if you have it
+        drawBoard(true);
+    }
 
+    private int promptGameNumber() {
+        System.out.print("Game number: ");
+        String input = inputScanner.nextLine().trim();
         try {
-            var games = facade.listGames(authToken);
-            if (gameNumber < 1 || gameNumber > games.size()) {
-                System.out.println("No such game index: " + gameNumber);
-                return;
+            int choice = Integer.parseInt(input);
+            if (!gameIndexToId.containsKey(choice)) {
+                System.out.println("Invalid number.");
+                return -1;
             }
-            var chosenGame = games.get(gameNumber - 1);
-
-            System.out.println("Observing game #" + gameNumber + " (" + chosenGame.gameName()
-                    + ") as an observer (white perspective).");
-            drawBoard(true);
-        } catch (Exception e) {
-            System.out.println("Observe game failed: " + e.getMessage());
+            return gameIndexToId.get(choice);
+        } catch (NumberFormatException e) {
+            System.out.println("Please enter a valid number.");
+            return -1;
         }
     }
 
-    /**
-     * Phase 5 requirement: Draw a dummy board with correct orientation
-     */
-    private void drawBoard(boolean whitePerspective) {
-        if (whitePerspective) {
-            System.out.println("Drawing board from White's perspective...");
-            for (int row = 8; row >= 1; row--) {
-                System.out.print(row + " ");
-                for (char col = 'a'; col <= 'h'; col++) {
-                    boolean isLightSquare = ((row + col) % 2 == 0);
-                    if (isLightSquare) {
-                        System.out.print("[ ]");
-                    } else {
-                        System.out.print("[#]");
-                    }
-                }
-                System.out.println();
+    private void drawBoard(boolean white) {
+        System.out.println("Drawing board from " + (white ? "White's" : "Black's") + " perspective...");
+        for (int row = 0; row < 8; row++) {
+            int realRow = white ? 8 - row : row + 1;
+            System.out.print(realRow + " ");
+            for (int col = 0; col < 8; col++) {
+                int realCol = white ? col + 1 : 8 - col;
+                boolean light = (realRow + realCol) % 2 == 0;
+                System.out.print(light ? "[ ]" : "[#]");
             }
-            System.out.println("   a  b  c  d  e  f  g  h ");
-        } else {
-            System.out.println("Drawing board from Black's perspective...");
-            for (int row = 1; row <= 8; row++) {
-                System.out.print(row + " ");
-                for (char col = 'h'; col >= 'a'; col--) {
-                    boolean isLightSquare = ((row + col) % 2 == 0);
-                    if (isLightSquare) {
-                        System.out.print("[ ]");
-                    } else {
-                        System.out.print("[#]");
-                    }
-                }
-                System.out.println();
-            }
-            System.out.println("   h  g  f  e  d  c  b  a ");
+            System.out.println();
         }
+        System.out.print("   ");
+        for (int col = 0; col < 8; col++) {
+            char c = (char) ('a' + (white ? col : 7 - col));
+            System.out.print(" " + c + " ");
+        }
+        System.out.println();
+    }
+
+    private void quit() {
+        System.out.println("Goodbye!");
+        System.exit(0);
+    }
+
+    private void showPostloginHelp() {
+        System.out.println("Postlogin commands:");
+        System.out.println("  help          - Show this menu");
+        System.out.println("  logout        - Logout of your current account");
+        System.out.println("  create game   - Create a new game in the server");
+        System.out.println("  list games    - List existing games on the server");
+        System.out.println("  play game     - Join a game by number + color");
+        System.out.println("  observe game  - Observe a game by number (white perspective)");
+        System.out.println("  quit          - Exit the program");
     }
 }

@@ -22,7 +22,6 @@ public class ServerFacadeTests {
 
     @BeforeEach
     public void reset() throws Exception {
-        // Register fresh user before each test
         authToken = facade.register("user_" + System.nanoTime(), "pass", "email@x.com").authToken();
     }
 
@@ -31,7 +30,6 @@ public class ServerFacadeTests {
         server.stop();
     }
 
-    // ========== Register ==========
     @Test
     public void registerPositive() throws Exception {
         var auth = facade.register("newUser", "pw", "email@e.com");
@@ -48,7 +46,6 @@ public class ServerFacadeTests {
         assertTrue(ex.getMessage().toLowerCase().contains("failed"));
     }
 
-    // ========== Login ==========
     @Test
     public void loginPositive() throws Exception {
         facade.register("logUser", "pass123", "log@example.com");
@@ -66,7 +63,6 @@ public class ServerFacadeTests {
         assertTrue(ex.getMessage().toLowerCase().contains("failed"));
     }
 
-    // ========== Logout ==========
     @Test
     public void logoutPositive() throws Exception {
         assertDoesNotThrow(() -> facade.logout(authToken));
@@ -80,7 +76,6 @@ public class ServerFacadeTests {
         assertTrue(ex.getMessage().toLowerCase().contains("failed"));
     }
 
-    // ========== Create Game ==========
     @Test
     public void createGamePositive() throws Exception {
         assertDoesNotThrow(() -> facade.createGame(authToken, "MyChessGame"));
@@ -94,7 +89,6 @@ public class ServerFacadeTests {
         assertTrue(ex.getMessage().toLowerCase().contains("no authtoken"));
     }
 
-    // ========== List Games ==========
     @Test
     public void listGamesPositive() throws Exception {
         facade.createGame(authToken, "Game1");
@@ -110,7 +104,6 @@ public class ServerFacadeTests {
         assertTrue(ex.getMessage().toLowerCase().contains("no authtoken"));
     }
 
-    // ========== Join Game ==========
     @Test
     public void joinGamePositive() throws Exception {
         facade.createGame(authToken, "JoinableGame");
