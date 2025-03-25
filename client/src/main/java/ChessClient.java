@@ -1,3 +1,4 @@
+import client.ServerFacade;
 import model.AuthData;
 import model.GameData;
 
@@ -159,7 +160,9 @@ public class ChessClient {
 
     private void doPlayGame() {
         int gameId = promptGameNumber();
-        if (gameId == -1) return;
+        if (gameId == -1){
+            return;
+        }
 
         System.out.print("What color? [white/black]: ");
         String color = inputScanner.nextLine().trim().toLowerCase();
@@ -179,7 +182,9 @@ public class ChessClient {
 
     private void doObserveGame() {
         int gameId = promptGameNumber();
-        if (gameId == -1) return;
+        if (gameId == -1){
+            return;
+        }
 
         drawUnicodeChessBoard(true);
     }
