@@ -5,27 +5,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Scanner;
 
-/**
- * ChessClient:
- * - Provides pre-login and post-login menus
- * - Calls ServerFacade for register/login/logout/etc.
- * - Draws a chessboard in the console using ANSI color codes,
- *   but uses Unicode chess symbols for the pieces.
- *
- * Phase 5 note:
- *   We do NOT do real gameplay. We just show a standard
- *   initial board from White or Black viewpoint.
- *   The user can do "play game" or "observe game" to see the board.
- */
 public class ChessClient {
     private final Scanner inputScanner = new Scanner(System.in);
-    private final ServerFacade facade = new ServerFacade(8080); // Adjust port if needed
+    private final ServerFacade facade = new ServerFacade(8080);
 
     private boolean loggedIn = false;
     private String authToken = null;
     private String username = null;
 
-    // Maps the "list index" (1..n) to actual gameID
     private HashMap<Integer, Integer> gameIndexToId = new HashMap<>();
 
     public void start() {
@@ -39,14 +26,11 @@ public class ChessClient {
                 }
             } catch (Exception e) {
                 System.out.println("Error: " + e.getMessage());
-                // For debugging: e.printStackTrace();
             }
         }
     }
 
-    // =====================
-    // PRE-LOGIN MENU
-    // =====================
+    //pre-lgoin
     private void handlePrelogin() {
         System.out.print("prelogin> ");
         String commandLine = inputScanner.nextLine().trim().toLowerCase();
@@ -101,9 +85,7 @@ public class ChessClient {
         }
     }
 
-    // =====================
-    // POST-LOGIN MENU
-    // =====================
+    //post login
     private void handlePostlogin() {
         System.out.print("postlogin> ");
         String commandLine = inputScanner.nextLine().trim().toLowerCase();
@@ -188,7 +170,6 @@ public class ChessClient {
 
         try {
             facade.joinGame(authToken, gameId, color.toUpperCase());
-            // Draw the fancy board from the perspective chosen
             boolean isWhite = color.equals("white");
             drawUnicodeChessBoard(isWhite);
         } catch (Exception e) {
@@ -200,7 +181,6 @@ public class ChessClient {
         int gameId = promptGameNumber();
         if (gameId == -1) return;
 
-        // Observers see from White's perspective
         drawUnicodeChessBoard(true);
     }
 
@@ -225,14 +205,6 @@ public class ChessClient {
         System.exit(0);
     }
 
-    // =======================================
-    // CHESS BOARD w/ UNICODE PIECES & ANSI
-    // =======================================
-
-    /**
-     * Draws a standard chess opening position in ASCII with ANSI color codes,
-     * using Unicode chess symbols. Oriented for White or Black.
-     */
     private void drawUnicodeChessBoard(boolean isWhitePerspective) {
         System.out.println("Drawing board from " + (isWhitePerspective ? "White" : "Black") + "'s perspective...");
 
@@ -240,56 +212,44 @@ public class ChessClient {
         // row=0 => rank8 (Black major pieces), row=7 => rank1 (White major)
         // We'll store uppercase as black, lowercase as white, then map to Unicode.
         String[][] initialSetup = {
-                {"R","N","B","Q","K","B","N","R"}, // black major (rank 8)
-                {"P","P","P","P","P","P","P","P"}, // black pawns (rank 7)
+                {"R","N","B","Q","K","B","N","R"},
+                {"P","P","P","P","P","P","P","P"},
                 {".",".",".",".",".",".",".","."},
                 {".",".",".",".",".",".",".","."},
                 {".",".",".",".",".",".",".","."},
                 {".",".",".",".",".",".",".","."},
-                {"p","p","p","p","p","p","p","p"}, // white pawns (rank 2)
-                {"r","n","b","q","k","b","n","r"}  // white major (rank 1)
+                {"p","p","p","p","p","p","p","p"},
+                {"r","n","b","q","k","b","n","r"}
         };
 
         for (int rowIndex = 0; rowIndex < 8; rowIndex++) {
-            // If white => rowIndex, if black => 7-rowIndex
             int actualRow = isWhitePerspective ? rowIndex : (7 - rowIndex);
-            int rankLabel = 8 - actualRow;  // e.g. row=0 => rank 8
+            int rankLabel = 8 - actualRow;
 
-            // Print rank # on left
             System.out.printf("%2d ", rankLabel);
 
             for (int colIndex = 0; colIndex < 8; colIndex++) {
                 int actualCol = isWhitePerspective ? colIndex : (7 - colIndex);
 
-                // Decide square color
                 boolean isLightSquare = ((actualRow + actualCol) % 2 == 0);
                 String bg = isLightSquare ? Ansi.BG_LIGHT : Ansi.BG_DARK;
 
-                // Convert letter to Unicode symbol
                 String letter = initialSetup[actualRow][actualCol];
                 if (letter.equals(".")) {
-                    letter = " "; // empty
+                    letter = " ";
                 } else {
                     letter = toUnicodeChessSymbol(letter);
                 }
 
                 System.out.print(bg);
-                // We won't do separate text color since the Unicode symbols themselves differ
-                // but if you want black/white color for pieces, you can do that:
-                // isBlackPiece => Ansi.FG_BLACK, etc.
-
-                // Print the cell
-                // Usually we do " letter " with padding
                 System.out.printf(" %s ", letter);
 
                 System.out.print(Ansi.RESET);
             }
 
-            // rank label on right
             System.out.printf(" %2d\n", rankLabel);
         }
 
-        // file labels
         System.out.print("   ");
         for (int colIndex = 0; colIndex < 8; colIndex++) {
             char fileLabel = (char) ('a' + (isWhitePerspective ? colIndex : (7 - colIndex)));
@@ -298,18 +258,9 @@ public class ChessClient {
         System.out.println();
     }
 
-    /**
-     * Maps an uppercase/lowercase letter to the correct Unicode chess symbol.
-     * Uppercase => black piece, lowercase => white piece.
-     *
-     * black R => ♜, N => ♞, B => ♝, Q => ♛, K => ♚, P => ♟
-     * white r => ♖, n => ♘, b => ♗, q => ♕, k => ♔, p => ♙
-     */
     private String toUnicodeChessSymbol(String letter) {
-        // letter is e.g. "r", "R", "p", "B", etc.
-        // We'll handle it in a switch
         return switch (letter) {
-            // black
+            //black
             case "R" -> "♜";
             case "N" -> "♞";
             case "B" -> "♝";
@@ -317,7 +268,7 @@ public class ChessClient {
             case "K" -> "♚";
             case "P" -> "♟";
 
-            // white
+            //white
             case "r" -> "♖";
             case "n" -> "♘";
             case "b" -> "♗";
@@ -325,14 +276,13 @@ public class ChessClient {
             case "k" -> "♔";
             case "p" -> "♙";
 
-            // or fallback
             default -> letter;
         };
     }
 
     private static class Ansi {
         public static final String RESET = "\u001b[0m";
-        public static final String BG_LIGHT = "\u001b[47m"; // white background
-        public static final String BG_DARK  = "\u001b[40m"; // black background
+        public static final String BG_LIGHT = "\u001b[47m";
+        public static final String BG_DARK  = "\u001b[40m";
     }
 }
