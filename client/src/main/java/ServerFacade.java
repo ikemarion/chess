@@ -9,6 +9,18 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * ServerFacade: Provides methods for the Chess client to call server endpoints:
+ * - register
+ * - login
+ * - logout
+ * - createGame
+ * - listGames
+ * - joinGame
+ * - clearDB
+ *
+ * This version calls DELETE /db to clear the database.
+ */
 public class ServerFacade {
 
     private final String baseUrl;
@@ -18,19 +30,23 @@ public class ServerFacade {
         this.baseUrl = "http://localhost:" + port;
     }
 
-    // Wrapper for server's JSON { "games": [...] } in listGames
-    private static class GamesWrapper {
-        List<GameData> games;
-    }
+    /**
+     * Calls DELETE /db, which should invoke ClearDAO on your server
+     * to wipe out all tables. If your server uses a different endpoint name,
+     * adjust accordingly.
+     */
+    public void clearDB() throws Exception {
+        URL url = new URL(baseUrl + "/db");
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("DELETE");
 
-    // For joining a game: { "gameID": 123, "playerColor": "WHITE" }
-    private static class JoinRequest {
-        int gameID;
-        String playerColor;
-
-        JoinRequest(int gameID, String playerColor) {
-            this.gameID = gameID;
-            this.playerColor = playerColor;
+        int status = conn.getResponseCode();
+        if (status == 200) {
+            conn.disconnect();
+        } else {
+            String err = readError(conn);
+            conn.disconnect();
+            throw new Exception("clearDB failed: " + err);
         }
     }
 
@@ -140,6 +156,10 @@ public class ServerFacade {
     }
 
     // ========== LIST GAMES ==========
+    private static class GamesWrapper {
+        List<GameData> games;
+    }
+
     public List<GameData> listGames(String authToken) throws Exception {
         if (authToken == null) {
             throw new Exception("listGames: No authToken provided");
@@ -155,9 +175,8 @@ public class ServerFacade {
             String resp = new String(conn.getInputStream().readAllBytes(), "UTF-8");
             conn.disconnect();
 
-            // parse as an object => { "games": [ ... ] }
             GamesWrapper w = gson.fromJson(resp, GamesWrapper.class);
-            return (w.games != null) ? w.games : new ArrayList<>();
+            return (w != null && w.games != null) ? w.games : new ArrayList<>();
         } else {
             String errMsg = readError(conn);
             conn.disconnect();
@@ -166,12 +185,20 @@ public class ServerFacade {
     }
 
     // ========== JOIN GAME ==========
+    private static class JoinRequest {
+        int gameID;
+        String playerColor;
+        JoinRequest(int gameID, String playerColor) {
+            this.gameID = gameID;
+            this.playerColor = playerColor;
+        }
+    }
+
     public void joinGame(String authToken, int gameID, String color) throws Exception {
         if (authToken == null) {
             throw new Exception("joinGame: No authToken provided");
         }
 
-        // The server expects "playerColor" not "gameName"
         JoinRequest body = new JoinRequest(gameID, color);
         String jsonBody = gson.toJson(body);
 
@@ -196,6 +223,7 @@ public class ServerFacade {
         }
     }
 
+    // Helper to read the error stream
     private String readError(HttpURLConnection conn) {
         try {
             var err = conn.getErrorStream();

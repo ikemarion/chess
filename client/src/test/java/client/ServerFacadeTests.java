@@ -8,6 +8,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ServerFacadeTests {
+
     private static Server server;
     private static ServerFacade facade;
     private static String authToken;
@@ -19,15 +20,16 @@ public class ServerFacadeTests {
         int port = server.run(0);
         System.out.println("Started test HTTP server on " + port);
 
-        // Create facade pointing to that port
+        // Create the facade pointing to that port
         facade = new ServerFacade(port);
     }
 
     @BeforeEach
     public void setUp() throws Exception {
-        // We’ll just create a fresh user for each test
-        // using testname1, testname2, etc.
-        // We'll do that in each test specifically to ensure no overlap
+        // Clear the database so each test starts fresh
+        facade.clearDB();
+
+        // We'll set authToken to null each time so we can register new users
         authToken = null;
     }
 
@@ -36,13 +38,13 @@ public class ServerFacadeTests {
         server.stop();
     }
 
-    // ==========================
+    // ======================
     // REGISTER
-    // ==========================
+    // ======================
     @Test
     public void registerPositive() throws Exception {
-        // user: "ikemarion"
-        var auth = facade.register("ikemarion", "pw", "ikemarion@example.com");
+        // user: "ikemarion" (fresh DB => no collision)
+        AuthData auth = facade.register("ikemarion", "pw", "ikemarion@example.com");
         assertNotNull(auth.authToken());
         assertEquals("ikemarion", auth.username());
     }
@@ -52,21 +54,22 @@ public class ServerFacadeTests {
         // user: "so_air_maniac"
         facade.register("so_air_maniac", "pw", "air@example.com");
 
+        // second register => duplicate => fail
         Exception ex = assertThrows(Exception.class, () ->
                 facade.register("so_air_maniac", "pw", "air@example.com")
         );
         assertTrue(ex.getMessage().toLowerCase().contains("failed"));
     }
 
-    // ==========================
+    // ======================
     // LOGIN
-    // ==========================
+    // ======================
     @Test
     public void loginPositive() throws Exception {
         // user: "cosmo"
         facade.register("cosmo", "secret", "cosmo@example.com");
 
-        var auth = facade.login("cosmo", "secret");
+        AuthData auth = facade.login("cosmo", "secret");
         assertNotNull(auth.authToken());
         assertEquals("cosmo", auth.username());
     }
@@ -76,15 +79,16 @@ public class ServerFacadeTests {
         // user: "lebronjames"
         facade.register("lebronjames", "rightPW", "lbj@example.com");
 
+        // attempt wrong PW => fail
         Exception ex = assertThrows(Exception.class, () ->
                 facade.login("lebronjames", "wrongPW")
         );
         assertTrue(ex.getMessage().toLowerCase().contains("failed"));
     }
 
-    // ==========================
+    // ======================
     // LOGOUT
-    // ==========================
+    // ======================
     @Test
     public void logoutPositive() throws Exception {
         // user: "isaac"
@@ -96,37 +100,38 @@ public class ServerFacadeTests {
 
     @Test
     public void logoutNegativeInvalidToken() {
-        // user: "im266" but we won't store the real auth token
-        // so we'll fail with bad token
+        // no user => pass a bogus token => fail
         Exception ex = assertThrows(Exception.class, () ->
                 facade.logout("bad-token")
         );
         assertTrue(ex.getMessage().toLowerCase().contains("failed"));
     }
 
-    // ==========================
+    // ======================
     // CREATE GAME
-    // ==========================
+    // ======================
     @Test
     public void createGamePositive() throws Exception {
         // user: "testname1"
         var auth = facade.register("testname1", "pw", "tn1@example.com");
         authToken = auth.authToken();
 
-        assertDoesNotThrow(() -> facade.createGame(authToken, "MyChessGame1"));
+        // create game with a fixed name
+        assertDoesNotThrow(() -> facade.createGame(authToken, "MyChessGame"));
     }
 
     @Test
     public void createGameNegativeNoAuth() {
+        // try create w/out token => fail
         Exception ex = assertThrows(Exception.class, () ->
                 facade.createGame(null, "NoAuthGame")
         );
         assertTrue(ex.getMessage().toLowerCase().contains("no authtoken"));
     }
 
-    // ==========================
+    // ======================
     // LIST GAMES
-    // ==========================
+    // ======================
     @Test
     public void listGamesPositive() throws Exception {
         // user: "testname2"
@@ -135,7 +140,7 @@ public class ServerFacadeTests {
 
         facade.createGame(authToken, "GameA");
         List<GameData> games = facade.listGames(authToken);
-        assertTrue(games.size() >= 1, "Should have at least 1 game");
+        assertTrue(games.size() >= 1, "Should have at least 1 game in DB");
     }
 
     @Test
@@ -146,20 +151,20 @@ public class ServerFacadeTests {
         assertTrue(ex.getMessage().toLowerCase().contains("no authtoken"));
     }
 
-    // ==========================
+    // ======================
     // JOIN GAME
-    // ==========================
+    // ======================
     @Test
     public void joinGamePositive() throws Exception {
         // user: "testname3"
         var auth = facade.register("testname3", "pw", "tn3@example.com");
         authToken = auth.authToken();
 
-        // create unique game
+        // create a game "JoinableX"
         facade.createGame(authToken, "JoinableX");
-        var games = facade.listGames(authToken);
 
-        // find the newly created game
+        // find that game
+        var games = facade.listGames(authToken);
         int gameID = -1;
         for (GameData g : games) {
             if ("JoinableX".equals(g.gameName())) {
@@ -167,8 +172,9 @@ public class ServerFacadeTests {
                 break;
             }
         }
-        assertNotEquals(-1, gameID, "Should find the new game JoinableX");
+        assertNotEquals(-1, gameID, "Should find the newly created game JoinableX");
 
+        // join with color=WHITE
         final int finalGameID = gameID;
         assertDoesNotThrow(() -> facade.joinGame(authToken, finalGameID, "WHITE"));
     }
@@ -179,9 +185,11 @@ public class ServerFacadeTests {
         var auth = facade.register("testname4", "pw", "tn4@example.com");
         authToken = auth.authToken();
 
+        // create "InvalidJoinGame"
         facade.createGame(authToken, "InvalidJoinGame");
-        var games = facade.listGames(authToken);
 
+        // find that game
+        var games = facade.listGames(authToken);
         int gameID = -1;
         for (GameData g : games) {
             if ("InvalidJoinGame".equals(g.gameName())) {
@@ -191,8 +199,8 @@ public class ServerFacadeTests {
         }
         assertNotEquals(-1, gameID);
 
+        // pass bogus token => fail
         final int finalGameID = gameID;
-        // pass bogus token => fails
         Exception ex = assertThrows(Exception.class, () ->
                 facade.joinGame("fakeTokenXYZ", finalGameID, "WHITE")
         );
