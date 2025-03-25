@@ -7,13 +7,12 @@ import java.util.Scanner;
 
 public class ChessClient {
     private final Scanner inputScanner = new Scanner(System.in);
-    private final ServerFacade facade = new ServerFacade(8080); // Change port if needed
+    private final ServerFacade facade = new ServerFacade(8080);
 
     private boolean loggedIn = false;
     private String authToken = null;
     private String username = null;
 
-    // Maps game # to actual game ID
     private HashMap<Integer, Integer> gameIndexToId = new HashMap<>();
 
     public void start() {

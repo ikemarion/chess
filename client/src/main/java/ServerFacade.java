@@ -9,18 +9,6 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * ServerFacade: Provides methods for the Chess client to call server endpoints:
- * - register
- * - login
- * - logout
- * - createGame
- * - listGames
- * - joinGame
- * - clearDB
- *
- * This version calls DELETE /db to clear the database.
- */
 public class ServerFacade {
 
     private final String baseUrl;
@@ -30,11 +18,6 @@ public class ServerFacade {
         this.baseUrl = "http://localhost:" + port;
     }
 
-    /**
-     * Calls DELETE /db, which should invoke ClearDAO on your server
-     * to wipe out all tables. If your server uses a different endpoint name,
-     * adjust accordingly.
-     */
     public void clearDB() throws Exception {
         URL url = new URL(baseUrl + "/db");
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -50,7 +33,7 @@ public class ServerFacade {
         }
     }
 
-    // ========== REGISTER ==========
+    //Register
     public AuthData register(String username, String password, String email) throws Exception {
         UserData body = new UserData(username, password, email);
         String jsonBody = gson.toJson(body);
@@ -77,7 +60,7 @@ public class ServerFacade {
         }
     }
 
-    // ========== LOGIN ==========
+    //Login
     public AuthData login(String username, String password) throws Exception {
         UserData body = new UserData(username, password, null);
         String jsonBody = gson.toJson(body);
@@ -104,7 +87,7 @@ public class ServerFacade {
         }
     }
 
-    // ========== LOGOUT ==========
+    //Logout
     public void logout(String authToken) throws Exception {
         if (authToken == null) {
             throw new Exception("logout: No authToken provided");
@@ -125,7 +108,7 @@ public class ServerFacade {
         }
     }
 
-    // ========== CREATE GAME ==========
+    //Create game
     public void createGame(String authToken, String gameName) throws Exception {
         if (authToken == null) {
             throw new Exception("createGame: No authToken provided");
@@ -155,7 +138,7 @@ public class ServerFacade {
         }
     }
 
-    // ========== LIST GAMES ==========
+    //List games
     private static class GamesWrapper {
         List<GameData> games;
     }
@@ -184,7 +167,7 @@ public class ServerFacade {
         }
     }
 
-    // ========== JOIN GAME ==========
+    //Join game
     private static class JoinRequest {
         int gameID;
         String playerColor;
