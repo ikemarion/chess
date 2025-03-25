@@ -223,7 +223,6 @@ public class ServerFacade {
         }
     }
 
-    // Helper to read the error stream
     private String readError(HttpURLConnection conn) {
         try {
             var err = conn.getErrorStream();
@@ -231,7 +230,6 @@ public class ServerFacade {
                 return new String(err.readAllBytes(), "UTF-8");
             }
         } catch (Exception e) {
-            // ignore
         }
         return "Unknown error";
     }
