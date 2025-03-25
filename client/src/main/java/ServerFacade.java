@@ -7,36 +7,31 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
-/**
- * ServerFacade: Provides methods for the Chess client to call server endpoints:
- * - register
- * - login
- * - logout
- * - createGame
- * - listGames
- * - joinGame
- *
- * If your server returns an object with "games": [ ... ] for the /game endpoint,
- * we use a tiny wrapper class to parse that object.
- */
 public class ServerFacade {
 
-    private final String baseUrl;  // e.g. "http://localhost:8080"
+    private final String baseUrl;
     private final Gson gson = new Gson();
 
     public ServerFacade(int port) {
         this.baseUrl = "http://localhost:" + port;
     }
 
-    /**
-     * For the case where the server returns { "games": [ {gameID:..., ...}, ... ] }
-     * we parse this wrapper object first, then return the actual List<GameData>.
-     */
+    // Wrapper for server's JSON { "games": [...] } in listGames
     private static class GamesWrapper {
         List<GameData> games;
+    }
+
+    // For joining a game: { "gameID": 123, "playerColor": "WHITE" }
+    private static class JoinRequest {
+        int gameID;
+        String playerColor;
+
+        JoinRequest(int gameID, String playerColor) {
+            this.gameID = gameID;
+            this.playerColor = playerColor;
+        }
     }
 
     // ========== REGISTER ==========
@@ -145,15 +140,6 @@ public class ServerFacade {
     }
 
     // ========== LIST GAMES ==========
-    /**
-     * Reads JSON like:
-     * {
-     *   "games": [
-     *     {"gameID":1, ...},
-     *     {"gameID":2, ...}
-     *   ]
-     * }
-     */
     public List<GameData> listGames(String authToken) throws Exception {
         if (authToken == null) {
             throw new Exception("listGames: No authToken provided");
@@ -171,7 +157,7 @@ public class ServerFacade {
 
             // parse as an object => { "games": [ ... ] }
             GamesWrapper w = gson.fromJson(resp, GamesWrapper.class);
-            return w.games != null ? w.games : new ArrayList<>();
+            return (w.games != null) ? w.games : new ArrayList<>();
         } else {
             String errMsg = readError(conn);
             conn.disconnect();
@@ -185,7 +171,8 @@ public class ServerFacade {
             throw new Exception("joinGame: No authToken provided");
         }
 
-        var body = new GameData(gameID, null, null, color, null);
+        // The server expects "playerColor" not "gameName"
+        JoinRequest body = new JoinRequest(gameID, color);
         String jsonBody = gson.toJson(body);
 
         URL url = new URL(baseUrl + "/game");
@@ -209,7 +196,6 @@ public class ServerFacade {
         }
     }
 
-    // Helper to read the error stream for debugging
     private String readError(HttpURLConnection conn) {
         try {
             var err = conn.getErrorStream();

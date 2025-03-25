@@ -14,17 +14,21 @@ public class ServerFacadeTests {
 
     @BeforeAll
     public static void init() {
+        // Start your server on random port
         server = new Server();
-        var port = server.run(0);
+        int port = server.run(0);
         System.out.println("Started test HTTP server on " + port);
+
+        // Create facade pointing to that port
         facade = new ServerFacade(port);
     }
 
     @BeforeEach
     public void setUp() throws Exception {
-        // Each test starts by registering a brand-new user (unique name)
-        String uniqueUser = "testUser_" + System.nanoTime();
-        authToken = facade.register(uniqueUser, "pw", uniqueUser + "@site.com").authToken();
+        // We’ll just create a fresh user for each test
+        // using testname1, testname2, etc.
+        // We'll do that in each test specifically to ensure no overlap
+        authToken = null;
     }
 
     @AfterAll
@@ -37,17 +41,19 @@ public class ServerFacadeTests {
     // ==========================
     @Test
     public void registerPositive() throws Exception {
-        String user = "uniqueReg_" + System.nanoTime();
-        var auth = facade.register(user, "pw", user + "@email.com");
+        // user: "ikemarion"
+        var auth = facade.register("ikemarion", "pw", "ikemarion@example.com");
         assertNotNull(auth.authToken());
-        assertEquals(user, auth.username());
+        assertEquals("ikemarion", auth.username());
     }
 
     @Test
     public void registerNegativeDuplicate() throws Exception {
-        facade.register("dupUser", "pw", "a@b.com");
+        // user: "so_air_maniac"
+        facade.register("so_air_maniac", "pw", "air@example.com");
+
         Exception ex = assertThrows(Exception.class, () ->
-                facade.register("dupUser", "pw", "a@b.com")
+                facade.register("so_air_maniac", "pw", "air@example.com")
         );
         assertTrue(ex.getMessage().toLowerCase().contains("failed"));
     }
@@ -57,20 +63,21 @@ public class ServerFacadeTests {
     // ==========================
     @Test
     public void loginPositive() throws Exception {
-        // unique user
-        String user = "logPos_" + System.nanoTime();
-        facade.register(user, "secret", user + "@test.com");
+        // user: "cosmo"
+        facade.register("cosmo", "secret", "cosmo@example.com");
 
-        var auth = facade.login(user, "secret");
+        var auth = facade.login("cosmo", "secret");
         assertNotNull(auth.authToken());
-        assertEquals(user, auth.username());
+        assertEquals("cosmo", auth.username());
     }
 
     @Test
     public void loginNegativeWrongPassword() throws Exception {
-        facade.register("pwUser", "correctPW", "pw@site.com");
+        // user: "lebronjames"
+        facade.register("lebronjames", "rightPW", "lbj@example.com");
+
         Exception ex = assertThrows(Exception.class, () ->
-                facade.login("pwUser", "wrongPW")
+                facade.login("lebronjames", "wrongPW")
         );
         assertTrue(ex.getMessage().toLowerCase().contains("failed"));
     }
@@ -79,12 +86,18 @@ public class ServerFacadeTests {
     // LOGOUT
     // ==========================
     @Test
-    public void logoutPositive() {
+    public void logoutPositive() throws Exception {
+        // user: "isaac"
+        var auth = facade.register("isaac", "pw", "isaac@example.com");
+        authToken = auth.authToken();
+
         assertDoesNotThrow(() -> facade.logout(authToken));
     }
 
     @Test
     public void logoutNegativeInvalidToken() {
+        // user: "im266" but we won't store the real auth token
+        // so we'll fail with bad token
         Exception ex = assertThrows(Exception.class, () ->
                 facade.logout("bad-token")
         );
@@ -95,11 +108,12 @@ public class ServerFacadeTests {
     // CREATE GAME
     // ==========================
     @Test
-    public void createGamePositive() {
-        String gameName = "GamePos_" + System.nanoTime();
-        // Use final local var for lambda
-        final String finalGameName = gameName;
-        assertDoesNotThrow(() -> facade.createGame(authToken, finalGameName));
+    public void createGamePositive() throws Exception {
+        // user: "testname1"
+        var auth = facade.register("testname1", "pw", "tn1@example.com");
+        authToken = auth.authToken();
+
+        assertDoesNotThrow(() -> facade.createGame(authToken, "MyChessGame1"));
     }
 
     @Test
@@ -115,9 +129,11 @@ public class ServerFacadeTests {
     // ==========================
     @Test
     public void listGamesPositive() throws Exception {
-        String gameName = "Game_" + System.nanoTime();
-        facade.createGame(authToken, gameName);
+        // user: "testname2"
+        var auth = facade.register("testname2", "pw", "tn2@example.com");
+        authToken = auth.authToken();
 
+        facade.createGame(authToken, "GameA");
         List<GameData> games = facade.listGames(authToken);
         assertTrue(games.size() >= 1, "Should have at least 1 game");
     }
@@ -135,33 +151,40 @@ public class ServerFacadeTests {
     // ==========================
     @Test
     public void joinGamePositive() throws Exception {
-        String gameName = "Joinable_" + System.nanoTime();
-        facade.createGame(authToken, gameName);
+        // user: "testname3"
+        var auth = facade.register("testname3", "pw", "tn3@example.com");
+        authToken = auth.authToken();
 
+        // create unique game
+        facade.createGame(authToken, "JoinableX");
         var games = facade.listGames(authToken);
+
+        // find the newly created game
         int gameID = -1;
         for (GameData g : games) {
-            if (gameName.equals(g.gameName())) {
+            if ("JoinableX".equals(g.gameName())) {
                 gameID = g.gameID();
                 break;
             }
         }
-        assertNotEquals(-1, gameID, "Should find the new game we created.");
+        assertNotEquals(-1, gameID, "Should find the new game JoinableX");
 
-        // Must store it in a final local var for the lambda
         final int finalGameID = gameID;
         assertDoesNotThrow(() -> facade.joinGame(authToken, finalGameID, "WHITE"));
     }
 
     @Test
     public void joinGameNegativeInvalidToken() throws Exception {
-        String gameName = "BadToken_" + System.nanoTime();
-        facade.createGame(authToken, gameName);
+        // user: "testname4"
+        var auth = facade.register("testname4", "pw", "tn4@example.com");
+        authToken = auth.authToken();
 
+        facade.createGame(authToken, "InvalidJoinGame");
         var games = facade.listGames(authToken);
+
         int gameID = -1;
         for (GameData g : games) {
-            if (gameName.equals(g.gameName())) {
+            if ("InvalidJoinGame".equals(g.gameName())) {
                 gameID = g.gameID();
                 break;
             }
@@ -169,6 +192,7 @@ public class ServerFacadeTests {
         assertNotEquals(-1, gameID);
 
         final int finalGameID = gameID;
+        // pass bogus token => fails
         Exception ex = assertThrows(Exception.class, () ->
                 facade.joinGame("fakeTokenXYZ", finalGameID, "WHITE")
         );
