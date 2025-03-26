@@ -26,12 +26,12 @@ public class ChessClient {
                     handlePostlogin();
                 }
             } catch (Exception e) {
-                System.out.println("Error: " + e.getMessage());
+                System.out.println("Error: " + hideJson(e.getMessage()));
             }
         }
     }
 
-    //pre-lgoin
+    //pre-login
     private void handlePrelogin() {
         System.out.print("prelogin> ");
         String commandLine = inputScanner.nextLine().trim().toLowerCase();
@@ -64,7 +64,7 @@ public class ChessClient {
             this.loggedIn = true;
             System.out.println("Logged in as " + username);
         } catch (Exception e) {
-            System.out.println("Login failed: " + e.getMessage());
+            System.out.println("Login failed");
         }
     }
 
@@ -82,11 +82,11 @@ public class ChessClient {
             this.loggedIn = true;
             System.out.println("Registered and logged in as " + username);
         } catch (Exception e) {
-            System.out.println("Register failed: " + e.getMessage());
+            System.out.println("Register failed");
         }
     }
 
-    //post login
+    //post-login
     private void handlePostlogin() {
         System.out.print("postlogin> ");
         String commandLine = inputScanner.nextLine().trim().toLowerCase();
@@ -121,7 +121,7 @@ public class ChessClient {
             loggedIn = false;
             System.out.println("Logged out.");
         } catch (Exception e) {
-            System.out.println("Logout failed: " + e.getMessage());
+            System.out.println("Logout failed");
         }
     }
 
@@ -132,7 +132,7 @@ public class ChessClient {
             facade.createGame(authToken, gameName);
             System.out.println("Game created: " + gameName);
         } catch (Exception e) {
-            System.out.println("Create game failed: " + e.getMessage());
+            System.out.println("Create game failed");
         }
     }
 
@@ -154,15 +154,13 @@ public class ChessClient {
                 System.out.printf("%d) %s (white=%s, black=%s)%n", index, g.gameName(), w, b);
             }
         } catch (Exception e) {
-            System.out.println("List games failed: " + e.getMessage());
+            System.out.println("List games failed");
         }
     }
 
     private void doPlayGame() {
         int gameId = promptGameNumber();
-        if (gameId == -1){
-            return;
-        }
+        if (gameId == -1) return;
 
         System.out.print("What color? [white/black]: ");
         String color = inputScanner.nextLine().trim().toLowerCase();
@@ -173,18 +171,15 @@ public class ChessClient {
 
         try {
             facade.joinGame(authToken, gameId, color.toUpperCase());
-            boolean isWhite = color.equals("white");
-            drawUnicodeChessBoard(isWhite);
+            drawUnicodeChessBoard(color.equals("white"));
         } catch (Exception e) {
-            System.out.println("Join failed: " + e.getMessage());
+            System.out.println("Join failed");
         }
     }
 
     private void doObserveGame() {
         int gameId = promptGameNumber();
-        if (gameId == -1){
-            return;
-        }
+        if (gameId == -1) return;
 
         drawUnicodeChessBoard(true);
     }
@@ -213,9 +208,6 @@ public class ChessClient {
     private void drawUnicodeChessBoard(boolean isWhitePerspective) {
         System.out.println("Drawing board from " + (isWhitePerspective ? "White" : "Black") + "'s perspective...");
 
-        // Hardcoded arrangement from White's viewpoint:
-        // row=0 => rank8 (Black major pieces), row=7 => rank1 (White major)
-        // We'll store uppercase as black, lowercase as white, then map to Unicode.
         String[][] initialSetup = {
                 {"R","N","B","Q","K","B","N","R"},
                 {"P","P","P","P","P","P","P","P"},
@@ -231,41 +223,40 @@ public class ChessClient {
             int actualRow = isWhitePerspective ? rowIndex : (7 - rowIndex);
             int rankLabel = 8 - actualRow;
 
+            //left label
             System.out.printf("%2d ", rankLabel);
 
             for (int colIndex = 0; colIndex < 8; colIndex++) {
                 int actualCol = isWhitePerspective ? colIndex : (7 - colIndex);
-
                 boolean isLightSquare = ((actualRow + actualCol) % 2 == 0);
                 String bg = isLightSquare ? Ansi.BG_LIGHT : Ansi.BG_DARK;
 
                 String letter = initialSetup[actualRow][actualCol];
-                if (letter.equals(".")) {
-                    letter = " ";
-                } else {
-                    letter = toUnicodeChessSymbol(letter);
-                }
+                if (letter.equals(".")) letter = " ";
+                else letter = toUnicodeChessSymbol(letter);
 
                 System.out.print(bg);
+
                 System.out.printf(" %s ", letter);
 
                 System.out.print(Ansi.RESET);
             }
-
+            //right label
             System.out.printf(" %2d\n", rankLabel);
         }
 
+        //file labels
         System.out.print("   ");
         for (int colIndex = 0; colIndex < 8; colIndex++) {
             char fileLabel = (char) ('a' + (isWhitePerspective ? colIndex : (7 - colIndex)));
-            System.out.print(" " + fileLabel + " ");
+            System.out.printf(" %c ", fileLabel);
         }
         System.out.println();
     }
 
-    private String toUnicodeChessSymbol(String letter) {
-        return switch (letter) {
-            //black
+    private String toUnicodeChessSymbol(String pieceLetter) {
+        return switch (pieceLetter) {
+            // black
             case "R" -> "♜";
             case "N" -> "♞";
             case "B" -> "♝";
@@ -273,16 +264,24 @@ public class ChessClient {
             case "K" -> "♚";
             case "P" -> "♟";
 
-            //white
+            // white
             case "r" -> "♖";
             case "n" -> "♘";
             case "b" -> "♗";
             case "q" -> "♕";
             case "k" -> "♔";
             case "p" -> "♙";
-
-            default -> letter;
+            default -> pieceLetter;
         };
+    }
+
+    private String hideJson(String msg) {
+        if (msg == null) return "Unknown error.";
+        int braceIdx = msg.indexOf('{');
+        if (braceIdx >= 0) {
+            msg = msg.substring(0, braceIdx);
+        }
+        return msg.trim();
     }
 
     private static class Ansi {
