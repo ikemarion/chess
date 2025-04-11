@@ -2,13 +2,21 @@ package server;
 
 import dataaccess.*;
 import service.*;
-import server.handlers.*;
+import server.handlers.GameplayWebSocketHandler;
+import server.handlers.ClearHandler;
+import server.handlers.UserHandler;
+import server.handlers.GameHandler;
 import spark.Spark;
 
 public class Server {
     private final UserService userService;
     private final GameService gameService;
     private final DatabaseService databaseService;
+
+    // DAO instances created once and reused
+    private final UserDAO userDAO;
+    private final GameDAO gameDAO;
+    private final AuthDAO authDAO;
 
     public Server() {
         try {
@@ -18,9 +26,9 @@ public class Server {
             throw new RuntimeException("Could not initialize database. Server cannot start.", e);
         }
 
-        UserDAO userDAO = new MySQLUserDAO();
-        GameDAO gameDAO = new MySQLGameDAO();
-        AuthDAO authDAO = new MySQLAuthDAO();
+        userDAO = new MySQLUserDAO();
+        gameDAO = new MySQLGameDAO();
+        authDAO = new MySQLAuthDAO();
         ClearDAO clearDAO = new ClearDAO(userDAO, gameDAO, authDAO);
 
         this.databaseService = new DatabaseService(clearDAO);
@@ -31,15 +39,13 @@ public class Server {
     public int run(int desiredPort) {
         Spark.port(desiredPort);
 
-        // ✅ Inject services and register WebSocket BEFORE any HTTP routes or Spark.init()
-        GameplayWebSocketHandler.initialize(gameService, userService);
+        // Inject the SAME DAO instances into the WebSocket handler.
+        GameplayWebSocketHandler.initialize(authDAO, gameDAO, userDAO);
         GameplayWebSocketHandler webSocketHandler = new GameplayWebSocketHandler();
         Spark.webSocket("/ws", webSocketHandler);
 
-        // Static files
         Spark.staticFiles.location("web");
 
-        // Handlers
         ClearHandler clearHandler = new ClearHandler(databaseService);
         Spark.delete("/db", clearHandler.clear);
 

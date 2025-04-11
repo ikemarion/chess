@@ -9,7 +9,8 @@ import model.GameData;
 public class LoadGameMessage extends ServerMessage {
 
     public LoadGameMessage(GameData updatedGame) {
-        super(ServerMessageType.LOAD_GAME, updatedGame);
+        // Pass null for recipient; your send logic can fill this later from sessionUserMap.
+        super(ServerMessageType.LOAD_GAME, updatedGame, null);
     }
 
     // For GSON

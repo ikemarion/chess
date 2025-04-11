@@ -10,11 +10,13 @@ import java.util.Objects;
 public class ChessGame {
     private ChessBoard board;
     private TeamColor turn;
+    private boolean resigned;  // new field to track if a player resigned
 
     public ChessGame() {
         board = new ChessBoard();
         setTeamTurn(TeamColor.WHITE);
         board.resetBoard();
+        resigned = false;
     }
 
     public TeamColor getTeamTurn() {
@@ -154,22 +156,47 @@ public class ChessGame {
         return board;
     }
 
+    /**
+     * Returns true if the game has ended due to resignation, checkmate, or stalemate.
+     */
+    public boolean isEndGame() {
+        return resigned ||
+                isInCheckmate(TeamColor.WHITE) || isInCheckmate(TeamColor.BLACK) ||
+                isInStalemate(TeamColor.WHITE) || isInStalemate(TeamColor.BLACK);
+    }
+
+    /**
+     * Marks the game as resigned, effectively ending the game.
+     */
+    public void setResigned() {
+        resigned = true;
+    }
+
+    /**
+     * Returns true if the game has been marked as resigned.
+     */
+    public boolean isResigned() {
+        return resigned;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
         ChessGame other = (ChessGame) o;
-        return Objects.equals(board, other.board) && turn == other.turn;
+        return Objects.equals(board, other.board) &&
+                turn == other.turn &&
+                resigned == other.resigned;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(board, turn);
+        return Objects.hash(board, turn, resigned);
     }
 
     @Override
     public String toString() {
-        return "ChessGame{board=" + board + ", turn=" + turn + "}";
+        return "ChessGame{board=" + board + ", turn=" + turn + ", resigned=" + resigned + "}";
     }
 }
