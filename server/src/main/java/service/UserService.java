@@ -21,8 +21,6 @@ public class UserService {
                 username.isEmpty() || password.isEmpty() || email.isEmpty()) {
             throw new DataAccessException("Error: bad request");
         }
-
-        // Check if the user already exists
         if (userDAO.getUser(username) != null) {
             throw new DataAccessException("Error: User already exists");
         }
@@ -41,17 +39,12 @@ public class UserService {
         if (username == null || password == null || username.isEmpty() || password.isEmpty()) {
             throw new DataAccessException("Error: bad request");
         }
-
-        // Check if the user exists and the password is correct
         if (!userDAO.authenticateUser(username, password)) {
             throw new DataAccessException("Error: unauthorized");
         }
 
-        // Generate authToken after successful login
         String authToken = UUID.randomUUID().toString();
         AuthData authData = new AuthData(authToken, username);
-
-        // Store authToken in the database
         authDAO.createAuth(authData);
 
         return authData;
@@ -60,8 +53,20 @@ public class UserService {
     public void logout(String authToken) throws DataAccessException {
         AuthData authData = authDAO.getAuth(authToken);
         if (authData == null) {
-            throw new DataAccessException("Invalid authentication token");  // Throw error for invalid token
+            throw new DataAccessException("Invalid authentication token");
         }
         authDAO.deleteAuth(authToken);
+    }
+
+    public String getUsernameFromToken(String authToken) throws DataAccessException {
+        if (authToken == null || authToken.isEmpty()) {
+            throw new DataAccessException("No auth token provided");
+        }
+
+        AuthData authData = authDAO.getAuth(authToken);
+        if (authData == null) {
+            throw new DataAccessException("Auth token not found");
+        }
+        return authData.username();
     }
 }

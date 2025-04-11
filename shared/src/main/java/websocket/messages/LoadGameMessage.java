@@ -1,17 +1,19 @@
 package websocket.messages;
 
-import chess.ChessGame;
+import model.GameData;
 
+/**
+ * A server message with serverMessageType = LOAD_GAME,
+ * carrying the full GameData.
+ */
 public class LoadGameMessage extends ServerMessage {
 
-    private ChessGame game;
-
-    public LoadGameMessage(ChessGame game) {
-        super(ServerMessageType.LOAD_GAME);
-        this.game = game;
+    public LoadGameMessage(GameData updatedGame) {
+        super(ServerMessageType.LOAD_GAME, updatedGame);
     }
 
-    public ChessGame getGame() {
-        return game;
+    // For GSON
+    public LoadGameMessage() {
+        super(ServerMessageType.LOAD_GAME);
     }
 }

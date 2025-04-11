@@ -21,7 +21,6 @@ public class Server {
         UserDAO userDAO = new MySQLUserDAO();
         GameDAO gameDAO = new MySQLGameDAO();
         AuthDAO authDAO = new MySQLAuthDAO();
-
         ClearDAO clearDAO = new ClearDAO(userDAO, gameDAO, authDAO);
 
         this.databaseService = new DatabaseService(clearDAO);
@@ -31,30 +30,32 @@ public class Server {
 
     public int run(int desiredPort) {
         Spark.port(desiredPort);
+
+        // ✅ Register WebSocket BEFORE any HTTP routes or Spark.init()
+        GameplayWebSocketHandler webSocketHandler = new GameplayWebSocketHandler(gameService);
+        Spark.webSocket("/ws", webSocketHandler);
+
+        // Static files
         Spark.staticFiles.location("web");
 
+        // Handlers
         ClearHandler clearHandler = new ClearHandler(databaseService);
-        UserHandler userHandler = new UserHandler(userService);
-        GameHandler gameHandler = new GameHandler(gameService);
-
-        // HTTP endpoints
         Spark.delete("/db", clearHandler.clear);
+
+        UserHandler userHandler = new UserHandler(userService);
         Spark.post("/user", userHandler.register);
         Spark.post("/session", userHandler.login);
         Spark.delete("/session", userHandler.logout);
+
+        GameHandler gameHandler = new GameHandler(gameService);
         Spark.get("/game", gameHandler.listGames);
         Spark.post("/game", gameHandler.createGame);
         Spark.put("/game", gameHandler.joinGame);
 
-        // WebSocket endpoint for gameplay
-        Spark.webSocket("/ws", GameplayWebSocketHandler.class);
-
-        // Configure the WebSocket handler so it can use userService/gameService
-        GameplayWebSocketHandler.configureServices(userService, gameService);
-
         Spark.init();
         Spark.awaitInitialization();
         System.out.println("Server running on port: " + Spark.port());
+
         return Spark.port();
     }
 

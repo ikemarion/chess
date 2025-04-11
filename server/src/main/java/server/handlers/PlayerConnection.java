@@ -6,6 +6,6 @@ package server.handlers;
 public class PlayerConnection {
     public String authToken;
     public int gameID;
-    public String username;
-    public String color;
+    public String username;  // once you figure it out from DB
+    public String color;     // "WHITE", "BLACK", or "OBSERVER"
 }

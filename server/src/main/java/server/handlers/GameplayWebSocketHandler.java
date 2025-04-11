@@ -1,279 +1,147 @@
 package server.handlers;
 
 import chess.ChessGame;
+import chess.ChessMove;
 import com.google.gson.Gson;
-import dataaccess.DataAccessException;
+import model.GameData;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.annotations.*;
 import service.GameService;
-import service.UserService;
 import websocket.commands.UserGameCommand;
-import websocket.commands.UserGameCommand.CommandType;
-import websocket.messages.LoadGameMessage;
-import websocket.messages.NotificationMessage;
+import websocket.messages.ServerMessage;
+import websocket.messages.ServerMessage.ServerMessageType;
+import javax.websocket.Endpoint;
 
+
+import java.io.IOException;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * GameplayWebSocketHandler example:
- *   - On CONNECT, validates token, sets up a PlayerConnection
- *   - On MAKE_MOVE, attempts a move, updates and broadcasts
- *   - On LEAVE, removes from the game and notifies others
- *   - On RESIGN, marks game as ended and notifies others
- *
- *   Uses specialized classes for LOAD_GAME (LoadGameMessage)
- *   and NOTIFICATION (NotificationMessage), but sends a minimal
- *   JSON object for errors.
- */
 @WebSocket
 public class GameplayWebSocketHandler {
 
-    private static UserService userService;
-    private static GameService gameService;
+    private static final Gson gson = new Gson();
+    private final GameService gameService;
+    private static final Map<Integer, Set<Session>> gameSessions = new ConcurrentHashMap<>();
 
-    /**
-     * Stores each connected session's info (username, token, color, gameID).
-     * sessionMap is keyed by the Jetty Session object.
-     */
-    private static final Map<Session, PlayerConnection> sessionMap = new ConcurrentHashMap<>();
-
-    private final Gson gson = new Gson();
-
-    /**
-     * Provide this so you can inject your existing
-     * UserService / GameService from outside.
-     */
-    public static void configureServices(UserService us, GameService gs) {
-        userService = us;
-        gameService = gs;
+    public GameplayWebSocketHandler(GameService gameService) {
+        this.gameService = gameService;
     }
 
     @OnWebSocketConnect
     public void onConnect(Session session) {
-        System.out.println("New WebSocket connection: " + session);
-        // Put a placeholder PlayerConnection in the map
-        sessionMap.put(session, new PlayerConnection());
+        System.out.println("WebSocket connected: " + session);
     }
 
     @OnWebSocketMessage
-    public void onMessage(Session session, String rawJson) {
-        System.out.println("Received WS message: " + rawJson);
-
+    public void onMessage(Session session, String message) {
         try {
-            // Convert the raw JSON into a simple UserGameCommand
-            UserGameCommand cmd = gson.fromJson(rawJson, UserGameCommand.class);
-            if (cmd == null) {
-                sendError(session, "Invalid or empty JSON in command");
+            UserGameCommand cmd = gson.fromJson(message, UserGameCommand.class);
+            if (cmd == null || cmd.getCommandType() == null) {
+                send(session, new ServerMessage(ServerMessageType.ERROR, "Error: Invalid or missing commandType"));
                 return;
             }
 
+            Integer gameID = cmd.getGameID();
+            String token = cmd.getAuthToken();
+
             switch (cmd.getCommandType()) {
-                case CONNECT -> handleConnect(session, cmd);
-                case MAKE_MOVE -> handleMakeMove(session, cmd);
-                case LEAVE -> handleLeave(session, cmd);
-                case RESIGN -> handleResign(session, cmd);
-                default -> sendError(session, "Unknown commandType: " + cmd.getCommandType());
+                case CONNECT -> {
+                    if (gameID == null || gameID <= 0) {
+                        send(session, new ServerMessage(ServerMessageType.ERROR, "Error: CONNECT missing valid gameID"));
+                        return;
+                    }
+
+                    ChessGame game = gameService.loadGame(gameID);
+                    gameSessions.computeIfAbsent(gameID, k -> ConcurrentHashMap.newKeySet()).add(session);
+
+                    GameData gameData = gameService.getGameData(gameID);
+                    send(session, new ServerMessage(ServerMessageType.LOAD_GAME, gameData));
+                    broadcastToGame(gameID, new ServerMessage(ServerMessageType.NOTIFICATION, "A user connected to game " + gameID));
+                }
+
+                case MAKE_MOVE -> {
+                    ChessMove move = cmd.move();
+                    if (gameID == null || move == null) {
+                        send(session, new ServerMessage(ServerMessageType.ERROR, "Error: MAKE_MOVE missing gameID or move"));
+                        return;
+                    }
+
+                    gameService.makeMove(gameID, move);
+                    GameData updated = gameService.getGameData(gameID);
+
+                    broadcastToGame(gameID, new ServerMessage(ServerMessageType.LOAD_GAME, updated));
+                    broadcastToGame(gameID, new ServerMessage(ServerMessageType.NOTIFICATION, "A move was made in game " + gameID));
+                }
+
+                case LEAVE -> {
+                    if (gameID == null || token == null) {
+                        send(session, new ServerMessage(ServerMessageType.ERROR, "Error: LEAVE missing gameID or authToken"));
+                        return;
+                    }
+
+                    gameService.leaveGame(gameID, token);
+                    removeSessionFromGame(gameID, session);
+                    broadcastToGame(gameID, new ServerMessage(ServerMessageType.NOTIFICATION, "A player has left game " + gameID));
+                }
+
+                case RESIGN -> {
+                    if (gameID == null || token == null) {
+                        send(session, new ServerMessage(ServerMessageType.ERROR, "Error: RESIGN missing gameID or authToken"));
+                        return;
+                    }
+
+                    gameService.resignGame(gameID, token);
+                    broadcastToGame(gameID, new ServerMessage(ServerMessageType.NOTIFICATION, "A player has resigned from game " + gameID));
+                }
             }
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            sendError(session, "Exception: " + ex.getMessage());
+
+        } catch (Exception e) {
+            System.err.println("WebSocket error: " + e.getMessage());
+            send(session, new ServerMessage(ServerMessageType.ERROR, "Error: " + e.getMessage()));
         }
     }
 
     @OnWebSocketClose
     public void onClose(Session session, int statusCode, String reason) {
-        System.out.println("Socket closed: " + reason);
-
-        // If the user didn't explicitly LEAVE, we do partial cleanup here
-        PlayerConnection pc = sessionMap.remove(session);
-        if (pc != null) {
-            // Optionally broadcast that the user disconnected
-            System.out.println("Session closed for user: " + pc.username);
-        }
+        System.out.println("WebSocket closed: " + reason);
+        gameSessions.values().forEach(set -> set.remove(session));
     }
 
     @OnWebSocketError
     public void onError(Session session, Throwable error) {
-        System.err.println("WebSocket error: " + error);
-        // Optionally handle or log
+        System.err.println("WebSocket error: " + error.getMessage());
     }
 
-    // ------------------------------------------------------------------
-    //                     COMMAND HANDLERS
-    // ------------------------------------------------------------------
-
-    private void handleConnect(Session session, UserGameCommand cmd) {
-        String token = cmd.getAuthToken();
-        Integer gameID = cmd.getGameID();
-
-        if (token == null || token.isBlank() || gameID == null) {
-            sendError(session, "CONNECT missing authToken or gameID");
-            return;
-        }
-
-        // Validate token -> retrieve username
-        String username;
+    private void send(Session session, ServerMessage msg) {
         try {
-            username = userService.getUsernameFromToken(token);
-        } catch (DataAccessException e) {
-            sendError(session, "Invalid auth token: " + e.getMessage());
-            return;
+            session.getRemote().sendString(gson.toJson(msg));
+        } catch (IOException e) {
+            System.err.println("Failed to send message: " + e.getMessage());
         }
-        if (username == null) {
-            sendError(session, "Auth token not found");
-            return;
-        }
-
-        // Retrieve or create a PlayerConnection for this session
-        PlayerConnection pc = sessionMap.get(session);
-        if (pc == null) {
-            pc = new PlayerConnection();
-            sessionMap.put(session, pc);
-        }
-        pc.authToken = token;
-        pc.username = username;
-        pc.gameID = gameID;
-
-        // Determine if this user is WHITE, BLACK, or OBSERVER
-        String color;
-        try {
-            // gameService.getPlayerColorIfExists returns "WHITE", "BLACK", or null if not a player
-            color = gameService.getPlayerColorIfExists(gameID, username);
-        } catch (DataAccessException e) {
-            sendError(session, "Failed to retrieve player color: " + e.getMessage());
-            return;
-        }
-
-        if (color == null) {
-            pc.color = "OBSERVER";
-        } else {
-            pc.color = color;  // "WHITE" or "BLACK"
-        }
-
-        // Load the chess game
-        ChessGame game;
-        try {
-            game = gameService.loadGame(gameID);
-        } catch (Exception e) {
-            sendError(session, "Could not load game from DB: " + e.getMessage());
-            return;
-        }
-
-        // Send a LOAD_GAME message to the newly connected user
-        sendLoadGame(session, game);
-
-        // Broadcast a notification to everyone else in this game
-        broadcastNotification(gameID, pc.username + " connected as " + pc.color);
     }
 
-    private void handleMakeMove(Session session, UserGameCommand cmd) {
-        PlayerConnection pc = sessionMap.get(session);
-        if (pc == null) {
-            sendError(session, "No PlayerConnection. Must CONNECT first.");
-            return;
-        }
+    private void broadcastToGame(int gameID, ServerMessage msg) {
+        Set<Session> sessions = gameSessions.get(gameID);
+        if (sessions == null) return;
 
-        // TODO: Extract move from cmd (cmd.getMove()), then attempt to make the move
-        try {
-            // Example:
-            // gameService.makeMove(pc.gameID, pc.username, cmd.getMove());
-        } catch (Exception ex) {
-            sendError(session, "Move failed: " + ex.getMessage());
-            return;
-        }
-
-        // Reload the updated board from DB
-        ChessGame updated;
-        try {
-            updated = gameService.loadGame(pc.gameID);
-        } catch (Exception ex2) {
-            sendError(session, "Could not load updated game: " + ex2.getMessage());
-            return;
-        }
-
-        // Broadcast the new board & a notification
-        broadcastLoadGame(pc.gameID, updated);
-        broadcastNotification(pc.gameID, pc.username + " made a move!");
-    }
-
-    private void handleLeave(Session session, UserGameCommand cmd) {
-        PlayerConnection pc = sessionMap.remove(session);
-        if (pc == null) {
-            // Not found in map
-            return;
-        }
-        // Possibly call gameService.leaveGame(pc.gameID, pc.username);
-
-        broadcastNotification(pc.gameID, pc.username + " left the game.");
-
-        // Optionally close the session
-        try {
-            session.close();
-        } catch (Exception ignore) {}
-    }
-
-    private void handleResign(Session session, UserGameCommand cmd) {
-        PlayerConnection pc = sessionMap.get(session);
-        if (pc == null) {
-            sendError(session, "No PlayerConnection. Must CONNECT first.");
-            return;
-        }
-
-        // Possibly call gameService.resignGame(pc.gameID, pc.username);
-        // Mark the game as over
-
-        broadcastNotification(pc.gameID, pc.username + " resigned!");
-    }
-
-    // ------------------------------------------------------------------
-    //                          HELPER METHODS
-    // ------------------------------------------------------------------
-
-    private void sendLoadGame(Session session, ChessGame game) {
-        LoadGameMessage msg = new LoadGameMessage(game);
         String json = gson.toJson(msg);
-        try {
-            session.getRemote().sendString(json);
-        } catch (Exception e) {
-            e.printStackTrace();
+        for (Session s : sessions) {
+            try {
+                s.getRemote().sendString(json);
+            } catch (IOException e) {
+                System.err.println("Broadcast failed: " + e.getMessage());
+            }
         }
     }
 
-    private void broadcastLoadGame(int gameID, ChessGame game) {
-        LoadGameMessage msg = new LoadGameMessage(game);
-        String json = gson.toJson(msg);
-        broadcastToGame(gameID, json);
-    }
-
-    private void broadcastNotification(int gameID, String text) {
-        NotificationMessage note = new NotificationMessage(text);
-        String json = gson.toJson(note);
-        broadcastToGame(gameID, json);
-    }
-
-    private void sendError(Session session, String errMsg) {
-        // A minimal JSON for errors:
-        String errorJson = String.format(
-                "{\"serverMessageType\":\"ERROR\",\"errorMessage\":\"%s\"}",
-                errMsg
-        );
-        try {
-            session.getRemote().sendString(errorJson);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void broadcastToGame(int gameID, String json) {
-        for (Session s : sessionMap.keySet()) {
-            PlayerConnection pc = sessionMap.get(s);
-            if (pc != null && pc.gameID == gameID && s.isOpen()) {
-                try {
-                    s.getRemote().sendString(json);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+    private void removeSessionFromGame(int gameID, Session session) {
+        Set<Session> sessions = gameSessions.get(gameID);
+        if (sessions != null) {
+            sessions.remove(session);
+            if (sessions.isEmpty()) {
+                gameSessions.remove(gameID);
             }
         }
     }
