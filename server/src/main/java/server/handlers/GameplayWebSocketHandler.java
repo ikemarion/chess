@@ -30,9 +30,9 @@ public class GameplayWebSocketHandler {
     private static GameDAO gameDAO;
     private static UserDAO userDAO;
 
-    // Map gameID -> Set of sessions connected to that game.
+    // Map: gameID -> Set of sessions connected to that game.
     private static final Map<Integer, Set<Session>> gameSessions = new ConcurrentHashMap<>();
-    // Map Session -> Username.
+    // Map: Session -> Username.
     private static final Map<Session, String> sessionUserMap = new ConcurrentHashMap<>();
 
     /**
@@ -109,7 +109,7 @@ public class GameplayWebSocketHandler {
     }
 
     // ------------------------------------------------------------------------
-    // Command handlers
+    // Command Handlers
     // ------------------------------------------------------------------------
 
     private void handleConnect(Session session, UserGameCommand cmd, String username)
@@ -129,12 +129,12 @@ public class GameplayWebSocketHandler {
         // Add this session to the set for the game.
         gameSessions.computeIfAbsent(gameID, k -> ConcurrentHashMap.newKeySet()).add(session);
 
-        // Send the current game state to this client.
+        // (1) Send LOAD_GAME to the joining user.
         sendBlocking(session, new ServerMessage(ServerMessageType.LOAD_GAME, game, username));
 
-        // Notify other players.
-        String notifyMsg = String.format("%s joined as %s", username, playerColor);
-        broadcastBlocking(gameID, new ServerMessage(ServerMessageType.NOTIFICATION, notifyMsg, null));
+        // (2) Broadcast "joined" notification to everyone except the joining session.
+        String notifyMsg = username + " joined as " + playerColor;
+        broadcastExcluding(gameID, session, new ServerMessage(ServerMessageType.NOTIFICATION, notifyMsg, null));
     }
 
     private void handleMakeMove(Session session, UserGameCommand cmd, String username)
@@ -298,7 +298,7 @@ public class GameplayWebSocketHandler {
         }
 
         if (game.whiteUsername() == null || game.whiteUsername().isEmpty()) {
-            // Assign as white
+            // Assign as white.
             GameData updated = new GameData(
                     game.gameID(),
                     username,
@@ -309,7 +309,7 @@ public class GameplayWebSocketHandler {
             gameDAO.updateGame(updated);
             return "WHITE";
         } else if (game.blackUsername() == null || game.blackUsername().isEmpty()) {
-            // Assign as black
+            // Assign as black.
             GameData updated = new GameData(
                     game.gameID(),
                     game.whiteUsername(),
@@ -360,6 +360,30 @@ public class GameplayWebSocketHandler {
                 Thread.sleep(50);
             } catch (InterruptedException | ExecutionException | IOException e) {
                 System.err.println("Broadcast failed: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Broadcasts a message to all sessions in the specified gameID, excluding the given session.
+     */
+    private void broadcastExcluding(int gameID, Session excludeSession, ServerMessage msg) {
+        Set<Session> sessions = gameSessions.get(gameID);
+        if (sessions == null) return;
+
+        for (Session s : sessions) {
+            if (s == excludeSession) {
+                continue;  // Skip the excluded session
+            }
+            try {
+                String recipient = sessionUserMap.get(s);
+                ServerMessage copy = copyMessageForRecipient(msg, recipient);
+                Future<Void> future = s.getRemote().sendStringByFuture(gson.toJson(copy));
+                future.get();
+                s.getRemote().flush();
+                Thread.sleep(50);
+            } catch (InterruptedException | ExecutionException | IOException e) {
+                System.err.println("BroadcastExcluding failed: " + e.getMessage());
             }
         }
     }
