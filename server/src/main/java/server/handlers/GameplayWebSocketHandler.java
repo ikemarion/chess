@@ -129,10 +129,10 @@ public class GameplayWebSocketHandler {
         // Add this session to the set for the game.
         gameSessions.computeIfAbsent(gameID, k -> ConcurrentHashMap.newKeySet()).add(session);
 
-        // (1) Send LOAD_GAME to the joining user.
+        // Send LOAD_GAME to the joining user.
         sendBlocking(session, new ServerMessage(ServerMessageType.LOAD_GAME, game, username));
 
-        // (2) Broadcast "joined" notification to everyone except the joining session.
+        // Broadcast "joined" notification to all sessions except this one.
         String notifyMsg = username + " joined as " + playerColor;
         broadcastExcluding(gameID, session, new ServerMessage(ServerMessageType.NOTIFICATION, notifyMsg, null));
     }
@@ -188,7 +188,7 @@ public class GameplayWebSocketHandler {
             return;
         }
 
-        // Create a new GameData record since records are immutable.
+        // Create updated GameData record (records are immutable).
         GameData updatedGame = new GameData(
                 game.gameID(),
                 game.whiteUsername(),
@@ -198,12 +198,11 @@ public class GameplayWebSocketHandler {
         );
         gameDAO.updateGame(updatedGame);
 
-        // Broadcast the updated game state.
+        // (1) Broadcast the updated game state (LOAD_GAME) to all sessions, including the mover.
         broadcastBlocking(gameID, new ServerMessage(ServerMessageType.LOAD_GAME, updatedGame, null));
 
-        // Optionally, broadcast a notification about the move.
-        broadcastBlocking(gameID, new ServerMessage(ServerMessageType.NOTIFICATION,
-                username + " made a move", null));
+        // (2) Broadcast the "made a move" notification to all sessions except the mover.
+        broadcastExcluding(gameID, session, new ServerMessage(ServerMessageType.NOTIFICATION, username + " made a move", null));
     }
 
     private void handleLeave(Session session, UserGameCommand cmd, String username)
@@ -287,8 +286,8 @@ public class GameplayWebSocketHandler {
     // ------------------------------------------------------------------------
 
     /**
-     * Determines the player's color. If neither side is occupied,
-     * assigns WHITE first, then BLACK. Returns "WHITE", "BLACK", or "OBSERVER".
+     * Determines the player's color. If neither side is occupied, assigns WHITE first, then BLACK.
+     * Returns "WHITE", "BLACK", or "OBSERVER".
      */
     private String determinePlayerColor(GameData game, String username) throws DataAccessException {
         if (username.equals(game.whiteUsername())) {
@@ -365,7 +364,7 @@ public class GameplayWebSocketHandler {
     }
 
     /**
-     * Broadcasts a message to all sessions in the specified gameID, excluding the given session.
+     * Broadcasts a message to all sessions in the specified game, excluding the given session.
      */
     private void broadcastExcluding(int gameID, Session excludeSession, ServerMessage msg) {
         Set<Session> sessions = gameSessions.get(gameID);
@@ -373,7 +372,7 @@ public class GameplayWebSocketHandler {
 
         for (Session s : sessions) {
             if (s == excludeSession) {
-                continue;  // Skip the excluded session
+                continue;  // Skip the excluded session.
             }
             try {
                 String recipient = sessionUserMap.get(s);
