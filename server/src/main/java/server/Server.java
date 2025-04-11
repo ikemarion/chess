@@ -31,8 +31,9 @@ public class Server {
     public int run(int desiredPort) {
         Spark.port(desiredPort);
 
-        // ✅ Register WebSocket BEFORE any HTTP routes or Spark.init()
-        GameplayWebSocketHandler webSocketHandler = new GameplayWebSocketHandler(gameService);
+        // ✅ Inject services and register WebSocket BEFORE any HTTP routes or Spark.init()
+        GameplayWebSocketHandler.initialize(gameService, userService);
+        GameplayWebSocketHandler webSocketHandler = new GameplayWebSocketHandler();
         Spark.webSocket("/ws", webSocketHandler);
 
         // Static files

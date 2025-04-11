@@ -1,33 +1,40 @@
 package server.handlers;
 
 import chess.ChessGame;
-import chess.ChessMove;
 import com.google.gson.Gson;
 import model.GameData;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.annotations.*;
 import service.GameService;
+import service.UserService;
 import websocket.commands.UserGameCommand;
 import websocket.messages.ServerMessage;
 import websocket.messages.ServerMessage.ServerMessageType;
-import javax.websocket.Endpoint;
-
 
 import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 @WebSocket
 public class GameplayWebSocketHandler {
 
     private static final Gson gson = new Gson();
-    private final GameService gameService;
-    private static final Map<Integer, Set<Session>> gameSessions = new ConcurrentHashMap<>();
 
-    public GameplayWebSocketHandler(GameService gameService) {
-        this.gameService = gameService;
+    private static GameService gameService;
+    private static UserService userService;
+
+    private static final Map<Integer, Set<Session>> gameSessions = new ConcurrentHashMap<>();
+    private static final Map<Session, Set<Integer>> loadGameSent = new ConcurrentHashMap<>();
+
+    public static void initialize(GameService gameSvc, UserService userSvc) {
+        gameService = gameSvc;
+        userService = userSvc;
     }
+
+    public GameplayWebSocketHandler() {}
 
     @OnWebSocketConnect
     public void onConnect(Session session) {
@@ -39,7 +46,7 @@ public class GameplayWebSocketHandler {
         try {
             UserGameCommand cmd = gson.fromJson(message, UserGameCommand.class);
             if (cmd == null || cmd.getCommandType() == null) {
-                send(session, new ServerMessage(ServerMessageType.ERROR, "Error: Invalid or missing commandType"));
+                sendBlocking(session, new ServerMessage(ServerMessageType.ERROR, "Error: Invalid or missing commandType"));
                 return;
             }
 
@@ -47,66 +54,89 @@ public class GameplayWebSocketHandler {
             String token = cmd.getAuthToken();
 
             switch (cmd.getCommandType()) {
+
                 case CONNECT -> {
                     if (gameID == null || gameID <= 0) {
-                        send(session, new ServerMessage(ServerMessageType.ERROR, "Error: CONNECT missing valid gameID"));
+                        sendBlocking(session, new ServerMessage(ServerMessageType.ERROR, "Error: CONNECT missing valid gameID"));
+                        return;
+                    }
+                    if (token == null || token.isEmpty()) {
+                        sendBlocking(session, new ServerMessage(ServerMessageType.ERROR, "Error: CONNECT missing auth token"));
+                        return;
+                    }
+
+                    String username = userService.getUsernameFromToken(token);
+                    if (username == null) {
+                        sendBlocking(session, new ServerMessage(ServerMessageType.ERROR, "Error: Invalid auth token"));
                         return;
                     }
 
                     ChessGame game = gameService.loadGame(gameID);
-                    gameSessions.computeIfAbsent(gameID, k -> ConcurrentHashMap.newKeySet()).add(session);
-
-                    GameData gameData = gameService.getGameData(gameID);
-                    send(session, new ServerMessage(ServerMessageType.LOAD_GAME, gameData));
-                    broadcastToGame(gameID, new ServerMessage(ServerMessageType.NOTIFICATION, "A user connected to game " + gameID));
-                }
-
-                case MAKE_MOVE -> {
-                    ChessMove move = cmd.move();
-                    if (gameID == null || move == null) {
-                        send(session, new ServerMessage(ServerMessageType.ERROR, "Error: MAKE_MOVE missing gameID or move"));
+                    if (game == null) {
+                        sendBlocking(session, new ServerMessage(ServerMessageType.ERROR, "Error: Game not found for ID: " + gameID));
                         return;
                     }
 
-                    gameService.makeMove(gameID, move);
+                    gameSessions.computeIfAbsent(gameID, k -> ConcurrentHashMap.newKeySet()).add(session);
+                    Set<Integer> sentGames = loadGameSent.computeIfAbsent(session, s -> ConcurrentHashMap.newKeySet());
+
+                    if (!sentGames.contains(gameID)) {
+                        GameData gameData = gameService.getGameData(gameID);
+                        System.out.println("DEBUG: Handling CONNECT for user: " + username + " gameID: " + gameID);
+                        System.out.println("DEBUG: gameService.getGameData returned: " + gameData);
+                        System.out.println("DEBUG: Sending LOAD_GAME to session: " + session);
+
+                        sendBlocking(session, new ServerMessage(ServerMessageType.LOAD_GAME, gameData));
+                        sentGames.add(gameID);
+                    }
+                }
+
+                case MAKE_MOVE -> {
+                    if (gameID == null || cmd.move() == null) {
+                        sendBlocking(session, new ServerMessage(ServerMessageType.ERROR, "Error: MAKE_MOVE missing gameID or move"));
+                        return;
+                    }
+
+                    gameService.makeMove(gameID, cmd.move());
                     GameData updated = gameService.getGameData(gameID);
 
-                    broadcastToGame(gameID, new ServerMessage(ServerMessageType.LOAD_GAME, updated));
-                    broadcastToGame(gameID, new ServerMessage(ServerMessageType.NOTIFICATION, "A move was made in game " + gameID));
+                    broadcastBlocking(gameID, new ServerMessage(ServerMessageType.LOAD_GAME, updated));
+                    broadcastBlocking(gameID, new ServerMessage(ServerMessageType.NOTIFICATION, "A move was made in game " + gameID));
                 }
 
                 case LEAVE -> {
                     if (gameID == null || token == null) {
-                        send(session, new ServerMessage(ServerMessageType.ERROR, "Error: LEAVE missing gameID or authToken"));
+                        sendBlocking(session, new ServerMessage(ServerMessageType.ERROR, "Error: LEAVE missing gameID or authToken"));
                         return;
                     }
 
                     gameService.leaveGame(gameID, token);
                     removeSessionFromGame(gameID, session);
-                    broadcastToGame(gameID, new ServerMessage(ServerMessageType.NOTIFICATION, "A player has left game " + gameID));
+                    broadcastBlocking(gameID, new ServerMessage(ServerMessageType.NOTIFICATION, "A player has left game " + gameID));
                 }
 
                 case RESIGN -> {
                     if (gameID == null || token == null) {
-                        send(session, new ServerMessage(ServerMessageType.ERROR, "Error: RESIGN missing gameID or authToken"));
+                        sendBlocking(session, new ServerMessage(ServerMessageType.ERROR, "Error: RESIGN missing gameID or authToken"));
                         return;
                     }
 
                     gameService.resignGame(gameID, token);
-                    broadcastToGame(gameID, new ServerMessage(ServerMessageType.NOTIFICATION, "A player has resigned from game " + gameID));
+                    broadcastBlocking(gameID, new ServerMessage(ServerMessageType.NOTIFICATION, "A player has resigned from game " + gameID));
                 }
             }
 
         } catch (Exception e) {
             System.err.println("WebSocket error: " + e.getMessage());
-            send(session, new ServerMessage(ServerMessageType.ERROR, "Error: " + e.getMessage()));
+            sendBlocking(session, new ServerMessage(ServerMessageType.ERROR, "Error: " + e.getMessage()));
         }
     }
 
     @OnWebSocketClose
     public void onClose(Session session, int statusCode, String reason) {
         System.out.println("WebSocket closed: " + reason);
-        gameSessions.values().forEach(set -> set.remove(session));
+        gameSessions.values().forEach(sessions -> sessions.remove(session));
+        loadGameSent.remove(session);
     }
 
     @OnWebSocketError
@@ -114,23 +144,36 @@ public class GameplayWebSocketHandler {
         System.err.println("WebSocket error: " + error.getMessage());
     }
 
-    private void send(Session session, ServerMessage msg) {
+    private void sendBlocking(Session session, ServerMessage msg) {
         try {
-            session.getRemote().sendString(gson.toJson(msg));
-        } catch (IOException e) {
+            String json = gson.toJson(msg);
+            Future<Void> future = session.getRemote().sendStringByFuture(json);
+            future.get();
+            try {
+                session.getRemote().flush();
+            } catch (IOException e) {
+                System.err.println("Flush failed: " + e.getMessage());
+            }
+        } catch (InterruptedException | ExecutionException e) {
             System.err.println("Failed to send message: " + e.getMessage());
         }
     }
 
-    private void broadcastToGame(int gameID, ServerMessage msg) {
+    private void broadcastBlocking(int gameID, ServerMessage msg) {
         Set<Session> sessions = gameSessions.get(gameID);
         if (sessions == null) return;
 
         String json = gson.toJson(msg);
         for (Session s : sessions) {
             try {
-                s.getRemote().sendString(json);
-            } catch (IOException e) {
+                Future<Void> future = s.getRemote().sendStringByFuture(json);
+                future.get();
+                try {
+                    s.getRemote().flush();
+                } catch (IOException e) {
+                    System.err.println("Flush failed: " + e.getMessage());
+                }
+            } catch (InterruptedException | ExecutionException e) {
                 System.err.println("Broadcast failed: " + e.getMessage());
             }
         }
@@ -144,5 +187,10 @@ public class GameplayWebSocketHandler {
                 gameSessions.remove(gameID);
             }
         }
+
+        loadGameSent.computeIfPresent(session, (sess, games) -> {
+            games.remove(gameID);
+            return games.isEmpty() ? null : games;
+        });
     }
 }
