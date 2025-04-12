@@ -160,7 +160,7 @@ public class ChessClient {
 
     private void doPlayGame() {
         int gameId = promptGameNumber();
-        if (gameId == -1) return;
+        if (gameId == -1) {return;}
 
         System.out.print("What color? [white/black]: ");
         String color = inputScanner.nextLine().trim().toLowerCase();
@@ -179,7 +179,7 @@ public class ChessClient {
 
     private void doObserveGame() {
         int gameId = promptGameNumber();
-        if (gameId == -1) return;
+        if (gameId == -1){return;}
 
         drawUnicodeChessBoard(true);
     }
@@ -232,8 +232,8 @@ public class ChessClient {
                 String bg = isLightSquare ? Ansi.BG_LIGHT : Ansi.BG_DARK;
 
                 String letter = initialSetup[actualRow][actualCol];
-                if (letter.equals(".")) letter = " ";
-                else letter = toUnicodeChessSymbol(letter);
+                if (letter.equals(".")) {letter = " ";}
+                else {letter = toUnicodeChessSymbol(letter);}
 
                 System.out.print(bg);
 
@@ -276,7 +276,7 @@ public class ChessClient {
     }
 
     private String hideJson(String msg) {
-        if (msg == null) return "Unknown error.";
+        if (msg == null) {return "Unknown error.";}
         int braceIdx = msg.indexOf('{');
         if (braceIdx >= 0) {
             msg = msg.substring(0, braceIdx);
