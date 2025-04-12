@@ -23,17 +23,14 @@ import java.util.concurrent.*;
 @WebSocket
 public class GameplayWebSocketHandler {
 
-    private static final Gson gson = new Gson();
-
-    // DAOs for authentication, game persistence, and user handling.
+    // Constants must be in UPPER_SNAKE_CASE.
+    private static final Gson GSON = new Gson();
     private static AuthDAO authDAO;
     private static GameDAO gameDAO;
     private static UserDAO userDAO;
 
-    // Map: gameID -> Set of sessions connected to that game.
-    private static final Map<Integer, Set<Session>> gameSessions = new ConcurrentHashMap<>();
-    // Map: Session -> Username.
-    private static final Map<Session, String> sessionUserMap = new ConcurrentHashMap<>();
+    private static final Map<Integer, Set<Session>> GAME_SESSIONS = new ConcurrentHashMap<>();
+    private static final Map<Session, String> SESSION_USER_MAP = new ConcurrentHashMap<>();
 
     /**
      * Dependency injection method.
@@ -53,7 +50,7 @@ public class GameplayWebSocketHandler {
     @OnWebSocketMessage
     public void onMessage(Session session, String message) {
         try {
-            UserGameCommand cmd = gson.fromJson(message, UserGameCommand.class);
+            UserGameCommand cmd = GSON.fromJson(message, UserGameCommand.class);
             if (cmd == null || cmd.getCommandType() == null) {
                 sendBlocking(session, new ServerMessage(ServerMessageType.ERROR,
                         "Invalid or missing commandType", null));
@@ -69,17 +66,31 @@ public class GameplayWebSocketHandler {
                 return;
             }
             String username = authData.username();
-            sessionUserMap.put(session, username);
+            SESSION_USER_MAP.put(session, username);
 
             // 2) Dispatch based on command type.
             switch (cmd.getCommandType()) {
-                case CONNECT -> handleConnect(session, cmd, username);
-                case MAKE_MOVE -> handleMakeMove(session, cmd, username);
-                case LEAVE -> handleLeave(session, cmd, username);
-                case RESIGN -> handleResign(session, cmd, username);
-                default ->
-                        sendBlocking(session, new ServerMessage(ServerMessageType.ERROR,
-                                "Unknown command type", username));
+                case CONNECT: {
+                    handleConnect(session, cmd, username);
+                    break;
+                }
+                case MAKE_MOVE: {
+                    handleMakeMove(session, cmd, username);
+                    break;
+                }
+                case LEAVE: {
+                    handleLeave(session, cmd, username);
+                    break;
+                }
+                case RESIGN: {
+                    handleResign(session, cmd, username);
+                    break;
+                }
+                default: {
+                    sendBlocking(session, new ServerMessage(ServerMessageType.ERROR,
+                            "Unknown command type", username));
+                    break;
+                }
             }
 
         } catch (DataAccessException dae) {
@@ -96,11 +107,12 @@ public class GameplayWebSocketHandler {
     @OnWebSocketClose
     public void onClose(Session session, int statusCode, String reason) {
         System.out.println("WebSocket closed: " + reason);
-        // Remove the session from all games and the user map.
-        for (Set<Session> sessions : gameSessions.values()) {
-            sessions.remove(session);
+        for (Set<Session> sessions : GAME_SESSIONS.values()) {
+            if (sessions != null) {
+                sessions.remove(session);
+            }
         }
-        sessionUserMap.remove(session);
+        SESSION_USER_MAP.remove(session);
     }
 
     @OnWebSocketError
@@ -124,17 +136,12 @@ public class GameplayWebSocketHandler {
         GameData game = gameDAO.getGame(gameID);
         ChessGame chess = game.game();
 
-        // Determine and assign the player's color if available.
         String playerColor = determinePlayerColor(game, username);
-
-        // Add this session to the game's session set.
-        gameSessions.computeIfAbsent(gameID, k -> ConcurrentHashMap.newKeySet()).add(session);
-
-        // Always send LOAD_GAME to the joining user.
+        GAME_SESSIONS.computeIfAbsent(gameID, k -> ConcurrentHashMap.newKeySet()).add(session);
         sendBlocking(session, new ServerMessage(ServerMessageType.LOAD_GAME, game, username));
 
-        // Only broadcast join notification if the game is still active.
-        if (chess != null && !chess.isEndGame()) {
+        // Only if the game is active, broadcast the join notification.
+        if ((chess != null) && (!chess.isEndGame())) {
             String notifyMsg = username + " joined as " + playerColor;
             broadcastExcluding(gameID, session, new ServerMessage(ServerMessageType.NOTIFICATION, notifyMsg, null));
         }
@@ -152,14 +159,12 @@ public class GameplayWebSocketHandler {
 
         GameData game = gameDAO.getGame(gameID);
         ChessGame chess = game.game();
-
         if (chess == null || chess.isEndGame()) {
             sendBlocking(session, new ServerMessage(ServerMessageType.ERROR,
                     "Game is over", username));
             return;
         }
 
-        // Verify the player's color.
         String playerColor = determinePlayerColor(game, username);
         if (playerColor.equals("OBSERVER")) {
             sendBlocking(session, new ServerMessage(ServerMessageType.ERROR,
@@ -167,16 +172,14 @@ public class GameplayWebSocketHandler {
             return;
         }
 
-        // Check if it's the player's turn.
-        ChessGame.TeamColor teamTurn = chess.getTeamTurn();
-        if ((teamTurn == ChessGame.TeamColor.WHITE && !playerColor.equals("WHITE")) ||
-                (teamTurn == ChessGame.TeamColor.BLACK && !playerColor.equals("BLACK"))) {
+        ChessGame.TeamColor turn = chess.getTeamTurn();
+        if ((turn == ChessGame.TeamColor.WHITE && !playerColor.equals("WHITE")) ||
+                (turn == ChessGame.TeamColor.BLACK && !playerColor.equals("BLACK"))) {
             sendBlocking(session, new ServerMessage(ServerMessageType.ERROR,
                     "Not your turn", username));
             return;
         }
 
-        // Validate and execute the move.
         if (!chess.validMoves(cmd.move().getStartPosition()).contains(cmd.move())) {
             sendBlocking(session, new ServerMessage(ServerMessageType.ERROR,
                     "Invalid move", username));
@@ -191,20 +194,15 @@ public class GameplayWebSocketHandler {
             return;
         }
 
-        // Update the game state.
-        GameData updatedGame = new GameData(
+        GameData updated = new GameData(
                 game.gameID(),
                 game.whiteUsername(),
                 game.blackUsername(),
                 game.gameName(),
                 chess
         );
-        gameDAO.updateGame(updatedGame);
-
-        // Broadcast updated game state to all sessions (including the mover).
-        broadcastBlocking(gameID, new ServerMessage(ServerMessageType.LOAD_GAME, updatedGame, null));
-
-        // Broadcast move notification to all sessions except the mover.
+        gameDAO.updateGame(updated);
+        broadcastBlocking(gameID, new ServerMessage(ServerMessageType.LOAD_GAME, updated, null));
         broadcastExcluding(gameID, session, new ServerMessage(ServerMessageType.NOTIFICATION, username + " made a move", null));
     }
 
@@ -219,8 +217,6 @@ public class GameplayWebSocketHandler {
         }
 
         GameData game = gameDAO.getGame(gameID);
-
-        // Remove the player from the game record.
         String newWhite = game.whiteUsername();
         String newBlack = game.blackUsername();
         if (username.equals(newWhite)) {
@@ -228,22 +224,19 @@ public class GameplayWebSocketHandler {
         } else if (username.equals(newBlack)) {
             newBlack = null;
         }
-        GameData updatedGame = new GameData(
+        GameData updated = new GameData(
                 game.gameID(),
                 newWhite,
                 newBlack,
                 game.gameName(),
                 game.game()
         );
-        gameDAO.updateGame(updatedGame);
-
-        // Remove the leaving user's session.
+        gameDAO.updateGame(updated);
         removeSessionFromGame(gameID, session);
         broadcastBlocking(gameID, new ServerMessage(ServerMessageType.NOTIFICATION,
                 username + " left the game", null));
     }
 
-    // UPDATED handleResign using Option 1:
     private void handleResign(Session session, UserGameCommand cmd, String username)
             throws DataAccessException {
 
@@ -256,37 +249,30 @@ public class GameplayWebSocketHandler {
 
         GameData game = gameDAO.getGame(gameID);
         ChessGame chess = game.game();
-
         if (chess == null || chess.isEndGame()) {
             sendBlocking(session, new ServerMessage(ServerMessageType.ERROR,
                     "Game already ended", username));
             return;
         }
 
-        // Ensure only players (not observers) may resign.
         if (!username.equals(game.whiteUsername()) && !username.equals(game.blackUsername())) {
             sendBlocking(session, new ServerMessage(ServerMessageType.ERROR,
                     "Observers cannot resign", username));
             return;
         }
 
-        // Mark the game as resigned.
         chess.setResigned();
-        GameData updatedGame = new GameData(
+        GameData updated = new GameData(
                 game.gameID(),
                 game.whiteUsername(),
                 game.blackUsername(),
                 game.gameName(),
                 chess
         );
-        gameDAO.updateGame(updatedGame);
-
-        // Broadcast a single NOTIFICATION message so remaining players see:
-        // "[username] resigned from the game"
+        gameDAO.updateGame(updated);
+        // Broadcast exactly one NOTIFICATION message.
         broadcastBlocking(gameID, new ServerMessage(ServerMessageType.NOTIFICATION,
                 username + " resigned from the game", null));
-
-        // Remove the resigning user's session so they won't receive further messages.
         removeSessionFromGame(gameID, session);
     }
 
@@ -294,17 +280,12 @@ public class GameplayWebSocketHandler {
     // Helper Methods
     // ------------------------------------------------------------------------
 
-    /**
-     * Determines the player's color. If neither slot is taken, assigns WHITE first then BLACK.
-     * Returns "WHITE", "BLACK", or "OBSERVER".
-     */
     private String determinePlayerColor(GameData game, String username) throws DataAccessException {
         if (username.equals(game.whiteUsername())) {
             return "WHITE";
         } else if (username.equals(game.blackUsername())) {
             return "BLACK";
         }
-
         if (game.whiteUsername() == null || game.whiteUsername().isEmpty()) {
             GameData updated = new GameData(
                     game.gameID(),
@@ -329,36 +310,31 @@ public class GameplayWebSocketHandler {
         return "OBSERVER";
     }
 
-    /**
-     * Sends a message to a single session and blocks until done.
-     */
+    private void sendMessage(Session s, ServerMessage msg) throws InterruptedException, ExecutionException, IOException {
+        String recipient = SESSION_USER_MAP.get(s);
+        ServerMessage copy = copyMessageForRecipient(msg, recipient);
+        Future<Void> future = s.getRemote().sendStringByFuture(GSON.toJson(copy));
+        future.get();
+        s.getRemote().flush();
+        Thread.sleep(50);
+    }
+
     private void sendBlocking(Session session, ServerMessage msg) {
-        String recipient = sessionUserMap.get(session);
-        if (recipient != null && msg.getRecipient() == null) {
-            msg.setRecipient(recipient);
-        }
-        String json = gson.toJson(msg);
         try {
-            Future<Void> future = session.getRemote().sendStringByFuture(json);
-            future.get();
-            session.getRemote().flush();
-            Thread.sleep(50);
+            sendMessage(session, msg);
         } catch (InterruptedException | ExecutionException | IOException e) {
             System.err.println("Error sending message: " + e.getMessage());
         }
     }
 
     private void broadcastBlocking(int gameID, ServerMessage msg) {
-        Set<Session> sessions = gameSessions.get(gameID);
-        if (sessions == null) return;
+        Set<Session> sessions = GAME_SESSIONS.get(gameID);
+        if (sessions == null) {
+            return;
+        }
         for (Session s : sessions) {
             try {
-                String recipient = sessionUserMap.get(s);
-                ServerMessage copy = copyMessageForRecipient(msg, recipient);
-                Future<Void> future = s.getRemote().sendStringByFuture(gson.toJson(copy));
-                future.get();
-                s.getRemote().flush();
-                Thread.sleep(50);
+                sendMessage(s, msg);
             } catch (InterruptedException | ExecutionException | IOException e) {
                 System.err.println("Broadcast failed: " + e.getMessage());
             }
@@ -366,17 +342,16 @@ public class GameplayWebSocketHandler {
     }
 
     private void broadcastExcluding(int gameID, Session excludeSession, ServerMessage msg) {
-        Set<Session> sessions = gameSessions.get(gameID);
-        if (sessions == null) return;
+        Set<Session> sessions = GAME_SESSIONS.get(gameID);
+        if (sessions == null) {
+            return;
+        }
         for (Session s : sessions) {
-            if (s == excludeSession) continue; // Skip excluded session.
+            if (s == excludeSession) {
+                continue;
+            }
             try {
-                String recipient = sessionUserMap.get(s);
-                ServerMessage copy = copyMessageForRecipient(msg, recipient);
-                Future<Void> future = s.getRemote().sendStringByFuture(gson.toJson(copy));
-                future.get();
-                s.getRemote().flush();
-                Thread.sleep(50);
+                sendMessage(s, msg);
             } catch (InterruptedException | ExecutionException | IOException e) {
                 System.err.println("BroadcastExcluding failed: " + e.getMessage());
             }
@@ -384,14 +359,14 @@ public class GameplayWebSocketHandler {
     }
 
     private void removeSessionFromGame(int gameID, Session session) {
-        Set<Session> sessions = gameSessions.get(gameID);
+        Set<Session> sessions = GAME_SESSIONS.get(gameID);
         if (sessions != null) {
             sessions.remove(session);
             if (sessions.isEmpty()) {
-                gameSessions.remove(gameID);
+                GAME_SESSIONS.remove(gameID);
             }
         }
-        sessionUserMap.remove(session);
+        SESSION_USER_MAP.remove(session);
     }
 
     private ServerMessage copyMessageForRecipient(ServerMessage original, String recipient) {
