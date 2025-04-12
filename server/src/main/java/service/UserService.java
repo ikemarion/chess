@@ -57,16 +57,4 @@ public class UserService {
         }
         authDAO.deleteAuth(authToken);
     }
-
-    public String getUsernameFromToken(String authToken) throws DataAccessException {
-        if (authToken == null || authToken.isEmpty()) {
-            throw new DataAccessException("No auth token provided");
-        }
-
-        AuthData authData = authDAO.getAuth(authToken);
-        if (authData == null) {
-            throw new DataAccessException("Auth token not found");
-        }
-        return authData.username();
-    }
 }
