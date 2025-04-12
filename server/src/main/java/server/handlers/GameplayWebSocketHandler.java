@@ -60,7 +60,7 @@ public class GameplayWebSocketHandler {
                 return;
             }
 
-            // 1) Verify the authentication token from DAO.
+            // 1) Verify the authentication token.
             String token = cmd.getAuthToken();
             AuthData authData = authDAO.getAuth(token);
             if (authData == null) {
@@ -71,7 +71,7 @@ public class GameplayWebSocketHandler {
             String username = authData.username();
             sessionUserMap.put(session, username);
 
-            // 2) Dispatch based on the command type.
+            // 2) Dispatch based on command type.
             switch (cmd.getCommandType()) {
                 case CONNECT -> handleConnect(session, cmd, username);
                 case MAKE_MOVE -> handleMakeMove(session, cmd, username);
@@ -96,7 +96,7 @@ public class GameplayWebSocketHandler {
     @OnWebSocketClose
     public void onClose(Session session, int statusCode, String reason) {
         System.out.println("WebSocket closed: " + reason);
-        // Clean up session from gameSessions and sessionUserMap.
+        // Remove the session from all games and the user map.
         for (Set<Session> sessions : gameSessions.values()) {
             sessions.remove(session);
         }
@@ -122,19 +122,22 @@ public class GameplayWebSocketHandler {
             return;
         }
         GameData game = gameDAO.getGame(gameID);
+        ChessGame chess = game.game();
 
-        // Determine and assign the player's color if a slot is available.
+        // Determine and assign the player's color if available.
         String playerColor = determinePlayerColor(game, username);
 
-        // Add this session to the set for the game.
+        // Add this session to the game's session set.
         gameSessions.computeIfAbsent(gameID, k -> ConcurrentHashMap.newKeySet()).add(session);
 
-        // Send LOAD_GAME to the joining user.
+        // Always send LOAD_GAME to the joining user.
         sendBlocking(session, new ServerMessage(ServerMessageType.LOAD_GAME, game, username));
 
-        // Broadcast "joined" notification to all sessions except this one.
-        String notifyMsg = username + " joined as " + playerColor;
-        broadcastExcluding(gameID, session, new ServerMessage(ServerMessageType.NOTIFICATION, notifyMsg, null));
+        // Only broadcast join notification if the game is still active.
+        if (chess != null && !chess.isEndGame()) {
+            String notifyMsg = username + " joined as " + playerColor;
+            broadcastExcluding(gameID, session, new ServerMessage(ServerMessageType.NOTIFICATION, notifyMsg, null));
+        }
     }
 
     private void handleMakeMove(Session session, UserGameCommand cmd, String username)
@@ -156,7 +159,7 @@ public class GameplayWebSocketHandler {
             return;
         }
 
-        // Check player's color.
+        // Verify the player's color.
         String playerColor = determinePlayerColor(game, username);
         if (playerColor.equals("OBSERVER")) {
             sendBlocking(session, new ServerMessage(ServerMessageType.ERROR,
@@ -164,7 +167,7 @@ public class GameplayWebSocketHandler {
             return;
         }
 
-        // Check if it is the player's turn.
+        // Check if it's the player's turn.
         ChessGame.TeamColor teamTurn = chess.getTeamTurn();
         if ((teamTurn == ChessGame.TeamColor.WHITE && !playerColor.equals("WHITE")) ||
                 (teamTurn == ChessGame.TeamColor.BLACK && !playerColor.equals("BLACK"))) {
@@ -188,7 +191,7 @@ public class GameplayWebSocketHandler {
             return;
         }
 
-        // Create updated GameData record (records are immutable).
+        // Update the game state.
         GameData updatedGame = new GameData(
                 game.gameID(),
                 game.whiteUsername(),
@@ -198,10 +201,10 @@ public class GameplayWebSocketHandler {
         );
         gameDAO.updateGame(updatedGame);
 
-        // (1) Broadcast the updated game state (LOAD_GAME) to all sessions, including the mover.
+        // Broadcast updated game state to all sessions (including the mover).
         broadcastBlocking(gameID, new ServerMessage(ServerMessageType.LOAD_GAME, updatedGame, null));
 
-        // (2) Broadcast the "made a move" notification to all sessions except the mover.
+        // Broadcast move notification to all sessions except the mover.
         broadcastExcluding(gameID, session, new ServerMessage(ServerMessageType.NOTIFICATION, username + " made a move", null));
     }
 
@@ -234,11 +237,13 @@ public class GameplayWebSocketHandler {
         );
         gameDAO.updateGame(updatedGame);
 
+        // Remove the leaving user's session.
         removeSessionFromGame(gameID, session);
         broadcastBlocking(gameID, new ServerMessage(ServerMessageType.NOTIFICATION,
                 username + " left the game", null));
     }
 
+    // UPDATED handleResign using Option 1:
     private void handleResign(Session session, UserGameCommand cmd, String username)
             throws DataAccessException {
 
@@ -258,7 +263,7 @@ public class GameplayWebSocketHandler {
             return;
         }
 
-        // Only players (not observers) may resign.
+        // Ensure only players (not observers) may resign.
         if (!username.equals(game.whiteUsername()) && !username.equals(game.blackUsername())) {
             sendBlocking(session, new ServerMessage(ServerMessageType.ERROR,
                     "Observers cannot resign", username));
@@ -267,7 +272,6 @@ public class GameplayWebSocketHandler {
 
         // Mark the game as resigned.
         chess.setResigned();
-
         GameData updatedGame = new GameData(
                 game.gameID(),
                 game.whiteUsername(),
@@ -277,8 +281,13 @@ public class GameplayWebSocketHandler {
         );
         gameDAO.updateGame(updatedGame);
 
+        // Broadcast a single NOTIFICATION message so remaining players see:
+        // "[username] resigned from the game"
         broadcastBlocking(gameID, new ServerMessage(ServerMessageType.NOTIFICATION,
                 username + " resigned from the game", null));
+
+        // Remove the resigning user's session so they won't receive further messages.
+        removeSessionFromGame(gameID, session);
     }
 
     // ------------------------------------------------------------------------
@@ -286,7 +295,7 @@ public class GameplayWebSocketHandler {
     // ------------------------------------------------------------------------
 
     /**
-     * Determines the player's color. If neither side is occupied, assigns WHITE first, then BLACK.
+     * Determines the player's color. If neither slot is taken, assigns WHITE first then BLACK.
      * Returns "WHITE", "BLACK", or "OBSERVER".
      */
     private String determinePlayerColor(GameData game, String username) throws DataAccessException {
@@ -297,7 +306,6 @@ public class GameplayWebSocketHandler {
         }
 
         if (game.whiteUsername() == null || game.whiteUsername().isEmpty()) {
-            // Assign as white.
             GameData updated = new GameData(
                     game.gameID(),
                     username,
@@ -308,7 +316,6 @@ public class GameplayWebSocketHandler {
             gameDAO.updateGame(updated);
             return "WHITE";
         } else if (game.blackUsername() == null || game.blackUsername().isEmpty()) {
-            // Assign as black.
             GameData updated = new GameData(
                     game.gameID(),
                     game.whiteUsername(),
@@ -319,12 +326,11 @@ public class GameplayWebSocketHandler {
             gameDAO.updateGame(updated);
             return "BLACK";
         }
-
         return "OBSERVER";
     }
 
     /**
-     * Sends a message to a single session and blocks until sending is complete.
+     * Sends a message to a single session and blocks until done.
      */
     private void sendBlocking(Session session, ServerMessage msg) {
         String recipient = sessionUserMap.get(session);
@@ -342,13 +348,9 @@ public class GameplayWebSocketHandler {
         }
     }
 
-    /**
-     * Broadcasts a message to all sessions connected to a given game.
-     */
     private void broadcastBlocking(int gameID, ServerMessage msg) {
         Set<Session> sessions = gameSessions.get(gameID);
         if (sessions == null) return;
-
         for (Session s : sessions) {
             try {
                 String recipient = sessionUserMap.get(s);
@@ -363,17 +365,11 @@ public class GameplayWebSocketHandler {
         }
     }
 
-    /**
-     * Broadcasts a message to all sessions in the specified game, excluding the given session.
-     */
     private void broadcastExcluding(int gameID, Session excludeSession, ServerMessage msg) {
         Set<Session> sessions = gameSessions.get(gameID);
         if (sessions == null) return;
-
         for (Session s : sessions) {
-            if (s == excludeSession) {
-                continue;  // Skip the excluded session.
-            }
+            if (s == excludeSession) continue; // Skip excluded session.
             try {
                 String recipient = sessionUserMap.get(s);
                 ServerMessage copy = copyMessageForRecipient(msg, recipient);
@@ -387,9 +383,6 @@ public class GameplayWebSocketHandler {
         }
     }
 
-    /**
-     * Removes a session from the game-specific session map.
-     */
     private void removeSessionFromGame(int gameID, Session session) {
         Set<Session> sessions = gameSessions.get(gameID);
         if (sessions != null) {
@@ -401,9 +394,6 @@ public class GameplayWebSocketHandler {
         sessionUserMap.remove(session);
     }
 
-    /**
-     * Clones a ServerMessage with the given recipient.
-     */
     private ServerMessage copyMessageForRecipient(ServerMessage original, String recipient) {
         if (original.getGame() != null) {
             return new ServerMessage(original.getServerMessageType(), original.getGame(), recipient);
