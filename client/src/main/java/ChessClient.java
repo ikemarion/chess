@@ -5,6 +5,7 @@ import model.UserData;
 import chess.ChessPosition;
 import chess.ChessMove;
 
+import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Scanner;
@@ -19,10 +20,14 @@ public class ChessClient {
     private boolean loggedIn = false;
     private String authToken = null;
     private String username = null;
-    // Maps the number shown on the game list to the gameID
+    // Maps game list numbers to game IDs
     private HashMap<Integer, Integer> gameIndexToId = new HashMap<>();
-    // NEW: Store the player's color when they join a game
+    // Stores the player's chosen color when joining a game (e.g., "WHITE" or "BLACK")
     private String currentPlayerColor = null;
+
+    // New fields for WebSocket usage
+    private GameWebSocketClient gameSocket;
+    private int currentGameId = -1;
 
     public void start() {
         System.out.println("Welcome to Chess Client! Type 'help' for commands.");
@@ -39,7 +44,7 @@ public class ChessClient {
         }
     }
 
-    // Pre-login commands.
+    // --- Pre-login Section ---
     private void handlePrelogin() {
         System.out.print("prelogin> ");
         String commandLine = inputScanner.nextLine().trim().toLowerCase();
@@ -94,7 +99,7 @@ public class ChessClient {
         }
     }
 
-    // Post-login commands.
+    // --- Post-login Section ---
     private void handlePostlogin() {
         System.out.print("postlogin> ");
         String commandLine = inputScanner.nextLine().trim().toLowerCase();
@@ -175,10 +180,15 @@ public class ChessClient {
             System.out.println("Invalid color. Must be 'white' or 'black'.");
             return;
         }
+
         try {
+            // Join the game via HTTP.
             facade.joinGame(authToken, gameId, color.toUpperCase());
-            // Store the chosen color for later commands.
-            currentPlayerColor = color.toUpperCase();
+            currentPlayerColor = color.toUpperCase();  // Store the player's chosen color.
+
+            // Connect to the game's WebSocket for in-game actions.
+            connectToGameWebSocket(gameId);
+
             drawUnicodeChessBoard(color.equals("white"));
             promptForMove(gameId, color.equals("white"));
         } catch (Exception e) {
@@ -189,7 +199,12 @@ public class ChessClient {
     private void doObserveGame() {
         int gameId = promptGameNumber();
         if (gameId == -1) { return; }
+
         try {
+            // For observers, mark the player's color as OBSERVER.
+            currentPlayerColor = "OBSERVER";
+            connectToGameWebSocket(gameId);
+
             drawUnicodeChessBoard(true);
             promptForMove(gameId, true);
         } catch (Exception e) {
@@ -218,7 +233,7 @@ public class ChessClient {
         System.exit(0);
     }
 
-    // Draw a basic chess board (uses a fixed initial setup for demonstration).
+    // --- Board Drawing Methods ---
     private void drawUnicodeChessBoard(boolean isWhitePerspective) {
         System.out.println("Drawing board from " + (isWhitePerspective ? "White" : "Black") + " perspective...");
         String[][] initialSetup = {
@@ -231,10 +246,11 @@ public class ChessClient {
                 {"p", "p", "p", "p", "p", "p", "p", "p"},
                 {"r", "n", "b", "q", "k", "b", "n", "r"}
         };
+
         for (int rowIndex = 0; rowIndex < 8; rowIndex++) {
             int actualRow = isWhitePerspective ? rowIndex : (7 - rowIndex);
             int rankLabel = 8 - actualRow;
-            System.out.printf("%2d ", rankLabel); // left label
+            System.out.printf("%2d ", rankLabel);
             for (int colIndex = 0; colIndex < 8; colIndex++) {
                 int actualCol = isWhitePerspective ? colIndex : (7 - colIndex);
                 boolean isLightSquare = ((actualRow + actualCol) % 2 == 0);
@@ -249,8 +265,9 @@ public class ChessClient {
                 System.out.printf(" %s ", letter);
                 System.out.print(Ansi.RESET);
             }
-            System.out.printf(" %2d%n", rankLabel); // right label
+            System.out.printf(" %2d%n", rankLabel);
         }
+
         System.out.print("   ");
         for (int colIndex = 0; colIndex < 8; colIndex++) {
             char fileLabel = (char) ('a' + (isWhitePerspective ? colIndex : (7 - colIndex)));
@@ -259,9 +276,10 @@ public class ChessClient {
         System.out.println();
     }
 
-    // Overloaded version which highlights legal destination squares.
+    // Overloaded version to highlight legal destination squares.
     private void drawUnicodeChessBoard(boolean isWhitePerspective, Set<chess.ChessPosition> legalDestinations) {
-        System.out.println("Drawing board from " + (isWhitePerspective ? "White" : "Black") + " perspective with legal moves highlighted...");
+        System.out.println("Drawing board from " + (isWhitePerspective ? "White" : "Black") +
+                " perspective with legal moves highlighted...");
         String[][] initialSetup = {
                 {"R", "N", "B", "Q", "K", "B", "N", "R"},
                 {"P", "P", "P", "P", "P", "P", "P", "P"},
@@ -272,6 +290,7 @@ public class ChessClient {
                 {"p", "p", "p", "p", "p", "p", "p", "p"},
                 {"r", "n", "b", "q", "k", "b", "n", "r"}
         };
+
         for (int rowIndex = 0; rowIndex < 8; rowIndex++) {
             int actualRow = isWhitePerspective ? rowIndex : (7 - rowIndex);
             int rankLabel = 8 - actualRow;
@@ -280,9 +299,8 @@ public class ChessClient {
                 int actualCol = isWhitePerspective ? colIndex : (7 - colIndex);
                 boolean isLightSquare = ((actualRow + actualCol) % 2 == 0);
                 String bg = isLightSquare ? Ansi.BG_LIGHT : Ansi.BG_DARK;
-                String square = "" + (char)('a' + actualCol) + (8 - actualRow);
+                String square = "" + (char) ('a' + actualCol) + (8 - actualRow);
                 if (legalDestinations != null && legalDestinations.contains(chess.ChessPosition.fromString(square))) {
-                    // Highlight legal destination with a different background.
                     bg = Ansi.BG_HIGHLIGHT;
                 }
                 String letter = initialSetup[actualRow][actualCol];
@@ -297,6 +315,7 @@ public class ChessClient {
             }
             System.out.printf(" %2d%n", rankLabel);
         }
+
         System.out.print("   ");
         for (int colIndex = 0; colIndex < 8; colIndex++) {
             char fileLabel = (char) ('a' + (isWhitePerspective ? colIndex : (7 - colIndex)));
@@ -313,7 +332,6 @@ public class ChessClient {
             case "Q" -> "♛";
             case "K" -> "♚";
             case "P" -> "♟";
-            // white pieces represented by lowercase in your setup
             case "r" -> "♖";
             case "n" -> "♘";
             case "b" -> "♗";
@@ -324,10 +342,56 @@ public class ChessClient {
         };
     }
 
-    // This method prompts for moves and supports commands such as leave, resign, legal, and move.
+    // --- WebSocket Integration Methods ---
+    private void connectToGameWebSocket(int gameId) {
+        try {
+            currentGameId = gameId;
+            // Change endpoint URI from "/gameplay" to "/ws"
+            URI endpointURI = new URI("ws://localhost:8080/ws");
+            gameSocket = new GameWebSocketClient(endpointURI);
+            gameSocket.addMessageHandler(message -> {
+                // Process server messages (e.g., update board state or display notifications)
+                System.out.println("WebSocket message received: " + message);
+            });
+            // Send an initial CONNECT command.
+            String connectMsg = String.format("{\"commandType\": \"CONNECT\", \"authToken\": \"%s\", \"gameID\": %d}",
+                    authToken, gameId);
+            gameSocket.sendMessage(connectMsg);
+            System.out.println("WebSocket CONNECT message sent.");
+        } catch (Exception e) {
+            System.err.println("WebSocket connection error: " + e.getMessage());
+        }
+    }
+
+    private void sendMove(String startSquare, String endSquare, String promotion) {
+        String moveMsg = String.format(
+                "{\"commandType\": \"MAKE_MOVE\", \"authToken\": \"%s\", \"gameID\": %d, " +
+                        "\"move\": {\"start\": \"%s\", \"end\": \"%s\", \"promotion\": \"%s\"}}",
+                authToken, currentGameId, startSquare, endSquare, (promotion != null ? promotion : "")
+        );
+        gameSocket.sendMessage(moveMsg);
+    }
+
+    private void sendResign() {
+        String resignMsg = String.format(
+                "{\"commandType\": \"RESIGN\", \"authToken\": \"%s\", \"gameID\": %d, \"playerColor\": \"%s\"}",
+                authToken, currentGameId, currentPlayerColor
+        );
+        gameSocket.sendMessage(resignMsg);
+    }
+
+    private void sendLeave() {
+        String leaveMsg = String.format(
+                "{\"commandType\": \"LEAVE\", \"authToken\": \"%s\", \"gameID\": %d, \"playerColor\": \"%s\"}",
+                authToken, currentGameId, currentPlayerColor
+        );
+        gameSocket.sendMessage(leaveMsg);
+    }
+
+    // --- Updated In-Game Prompt ---
     private void promptForMove(int gameId, boolean isWhitePerspective) {
         System.out.println("In-game commands:");
-        System.out.println("  move <start> <end> [promotion]   - Make a move (e.g., e2 e4 or e7 e8 q)");
+        System.out.println("  move <start> <end> [promotion]   - Make a move (e.g., move e2 e4 or move e7 e8 q)");
         System.out.println("  legal <square>                   - Show legal moves from that square (e.g., legal e2)");
         System.out.println("  leave                            - Leave the game");
         System.out.println("  resign                           - Resign from the game");
@@ -344,7 +408,7 @@ public class ChessClient {
             }
             if (commandLine.equals("help")) {
                 System.out.println("Available in-game commands:");
-                System.out.println("  move <start> <end> [promotion]   - Example: e2 e4 or e7 e8 q");
+                System.out.println("  move <start> <end> [promotion]   - Example: move e2 e4 or move e7 e8 q");
                 System.out.println("  legal <square>                   - Example: legal e2");
                 System.out.println("  leave                            - Leave the game");
                 System.out.println("  resign                           - Resign from the game");
@@ -353,25 +417,16 @@ public class ChessClient {
                 continue;
             }
             if (commandLine.equals("leave")) {
-                try {
-                    facade.leaveGame(authToken, gameId, currentPlayerColor);
-                    System.out.println("You have left the game.");
-                    break;
-                } catch (Exception e) {
-                    System.out.println("Leave failed: " + e.getMessage());
-                }
-                continue;
+                sendLeave();
+                System.out.println("Leave command sent over WebSocket.");
+                break;
             }
             if (commandLine.equals("resign")) {
                 System.out.print("Are you sure you want to resign? (y/n): ");
                 String response = inputScanner.nextLine().trim().toLowerCase();
                 if (response.equals("y")) {
-                    try {
-                        facade.resignGame(authToken, gameId, currentPlayerColor);
-                        System.out.println("You have resigned from the game.");
-                    } catch (Exception e) {
-                        System.out.println("Resign failed: " + e.getMessage());
-                    }
+                    sendResign();
+                    System.out.println("Resign command sent over WebSocket.");
                     break;
                 } else {
                     System.out.println("Resignation canceled.");
@@ -390,12 +445,11 @@ public class ChessClient {
             if (commandLine.startsWith("legal")) {
                 String[] parts = commandLine.split("\\s+");
                 if (parts.length != 2) {
-                    System.out.println("Usage: legal <square>  (e.g., legal e2)");
+                    System.out.println("Usage: legal <square> (e.g., legal e2)");
                     continue;
                 }
                 String squareStr = parts[1];
-                // Assumes a static method ChessPosition.fromString exists.
-                chess.ChessPosition pos = chess.ChessPosition.fromString(squareStr);
+                ChessPosition pos = ChessPosition.fromString(squareStr);
                 if (pos == null) {
                     System.out.println("Invalid square: " + squareStr);
                     continue;
@@ -403,7 +457,7 @@ public class ChessClient {
                 try {
                     GameData currentGame = facade.getGame(authToken, gameId);
                     Set<ChessMove> legalMoves = (Set<ChessMove>) currentGame.game().validMoves(pos);
-                    Set<chess.ChessPosition> legalDestinations = legalMoves.stream()
+                    Set<ChessPosition> legalDestinations = legalMoves.stream()
                             .map(ChessMove::getEndPosition)
                             .collect(Collectors.toSet());
                     drawUnicodeChessBoard(isWhitePerspective, legalDestinations);
@@ -412,21 +466,30 @@ public class ChessClient {
                 }
                 continue;
             }
-            // Otherwise, assume it's a move command.
-            String[] tokens = commandLine.split("\\s+");
-            if (tokens.length < 2 || tokens.length > 3) {
-                System.out.println("Invalid move format. Use: <start> <end> [promotion]");
+            // Handle move commands.
+            if (commandLine.startsWith("move ")) {
+                String[] tokens = commandLine.split("\\s+");
+                if (tokens.length < 3 || tokens.length > 4) {
+                    System.out.println("Invalid move format. Use: move <start> <end> [promotion]");
+                    continue;
+                }
+                // tokens[0] is "move"
+                String startSquare = tokens[1];
+                String endSquare = tokens[2];
+                String promotion = (tokens.length == 4) ? tokens[3] : null;
+                sendMove(startSquare, endSquare, promotion);
                 continue;
-            }
-            String startSquare = tokens[0];
-            String endSquare = tokens[1];
-            String promotion = (tokens.length == 3) ? tokens[2] : null;
-            try {
-                facade.makeMove(authToken, gameId, startSquare, endSquare, promotion);
-                GameData updatedGame = facade.getGame(authToken, gameId);
-                drawUnicodeChessBoard(isWhitePerspective);
-            } catch (Exception e) {
-                System.out.println("Move failed: " + e.getMessage());
+            } else {
+                // Fallback: if no "move" prefix, treat the command as a move command.
+                String[] tokens = commandLine.split("\\s+");
+                if (tokens.length < 2 || tokens.length > 3) {
+                    System.out.println("Invalid move format. Use: move <start> <end> [promotion]");
+                    continue;
+                }
+                String startSquare = tokens[0];
+                String endSquare = tokens[1];
+                String promotion = (tokens.length == 3) ? tokens[2] : null;
+                sendMove(startSquare, endSquare, promotion);
             }
         }
     }
@@ -445,7 +508,7 @@ public class ChessClient {
     private static class Ansi {
         public static final String RESET = "\u001b[0m";
         public static final String BG_LIGHT = "\u001b[47m";
-        public static final String BG_DARK  = "\u001b[40m";
-        public static final String BG_HIGHLIGHT = "\u001b[43m"; // Yellow background for highlighting
+        public static final String BG_DARK = "\u001b[40m";
+        public static final String BG_HIGHLIGHT = "\u001b[43m"; // Yellow for highlighting
     }
 }
