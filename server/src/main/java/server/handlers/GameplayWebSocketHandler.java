@@ -189,7 +189,7 @@ public class GameplayWebSocketHandler {
         try {
             chess.makeMove(cmd.move());
         } catch (InvalidMoveException ex) {
-            sendBlocking(session, new ServerMessage(ServerMessageType.ERROR,
+                    sendBlocking(session, new ServerMessage(ServerMessageType.ERROR,
                     "Move error: " + ex.getMessage(), username));
             return;
         }

@@ -364,13 +364,47 @@ public class ChessClient {
     }
 
     private void sendMove(String startSquare, String endSquare, String promotion) {
+        // Convert the algebraic notation (e.g., "e2") to your ChessPosition object.
+        ChessPosition startPosition = convertSquareToPosition(startSquare);
+        ChessPosition endPosition = convertSquareToPosition(endSquare);
+
+        // Build the JSON payload with correct keys.
+        // For promotionPiece, you can choose to output null or an empty string if there's no promotion.
+        String promotionPieceValue = promotion != null && !promotion.isEmpty() ? promotion : "null";
+
         String moveMsg = String.format(
-                "{\"commandType\": \"MAKE_MOVE\", \"authToken\": \"%s\", \"gameID\": %d, " +
-                        "\"move\": {\"start\": \"%s\", \"end\": \"%s\", \"promotion\": \"%s\"}}",
-                authToken, currentGameId, startSquare, endSquare, (promotion != null ? promotion : "")
+                "{" +
+                        "\"commandType\": \"MAKE_MOVE\", " +
+                        "\"authToken\": \"%s\", " +
+                        "\"gameID\": %d, " +
+                        "\"move\": {" +
+                        "\"startPosition\": {\"row\": %d, \"column\": %d}, " +
+                        "\"endPosition\": {\"row\": %d, \"column\": %d}, " +
+                        "\"promotionPiece\": %s" +
+                        "}" +
+                        "}",
+                authToken, currentGameId,
+                startPosition.getRow(), startPosition.getColumn(),
+                endPosition.getRow(), endPosition.getColumn(),
+                // If promotionPiece is not meant to be a string literal "null", adjust accordingly.
+                promotion != null && !promotion.isEmpty() ? "\"" + promotion + "\"" : "null"
         );
+
+        // Log the JSON payload so you can verify its structure.
+        System.out.println("Sending move JSON: " + moveMsg);
+
+        // Send the message over the WebSocket.
         gameSocket.sendMessage(moveMsg);
     }
+
+    private ChessPosition convertSquareToPosition(String square) {
+        // Assuming square is two characters, e.g. "e2"
+        char file = square.charAt(0);              // 'e'
+        int rank = Character.getNumericValue(square.charAt(1)); // 2
+        int column = file - 'a' + 1;               // 'e' -> 5
+        return new ChessPosition(rank, column);
+    }
+
 
     private void sendResign() {
         String resignMsg = String.format(

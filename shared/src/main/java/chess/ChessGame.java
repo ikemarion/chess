@@ -61,19 +61,34 @@ public class ChessGame {
 
     public void makeMove(ChessMove move) throws InvalidMoveException {
         ChessPiece piece = board.getPiece(move.getStartPosition());
-        boolean isValid = validMoves(move.getStartPosition()).contains(move);
+        // Use the Collection returned by validMoves instead of casting to a List.
+        Collection<ChessMove> validMovesFromPosition = validMoves(move.getStartPosition());
+        System.out.println("Number of valid moves from " + move.getStartPosition() + ": " + validMovesFromPosition.size());
+        boolean isValid = validMovesFromPosition.contains(move);
         boolean correctTurn = (piece != null && piece.getTeamColor() == turn);
+
+        // Logging diagnostic information
+        System.out.println("=== Attempting move: " + move);
+        System.out.println("Piece at start (" + move.getStartPosition() + "): " + piece);
+        System.out.println("Current turn: " + turn);
+        System.out.println("Submitted move: " + move);
+        System.out.println("Valid moves from " + move.getStartPosition() + ":");
+        for (ChessMove validMove : validMovesFromPosition) {
+            System.out.println("  " + validMove + " -> equals submitted? " + validMove.equals(move));
+        }
+        System.out.println("Is move valid? " + isValid);
+        System.out.println("Is correct turn? " + correctTurn);
 
         if (isValid && correctTurn) {
             if (move.getPromotionPiece() != null) {
-                board.addPiece(move.getEndPosition(),
-                        new ChessPiece(turn, move.getPromotionPiece()));
+                board.addPiece(move.getEndPosition(), new ChessPiece(turn, move.getPromotionPiece()));
             } else {
                 board.addPiece(move.getEndPosition(), piece);
             }
             board.addPiece(move.getStartPosition(), null);
             toggleTurn();
         } else {
+            System.err.println("Move rejected. isValid: " + isValid + ", correctTurn: " + correctTurn);
             throw new InvalidMoveException();
         }
     }

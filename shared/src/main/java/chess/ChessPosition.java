@@ -32,10 +32,19 @@ public class ChessPosition {
     @Override
     public boolean equals(Object o) {
         if (o == null || getClass() != o.getClass()) {
+            System.out.println("ChessPosition.equals: Other object is null or not a ChessPosition");
             return false;
         }
         ChessPosition that = (ChessPosition) o;
-        return row == that.row && col == that.col;
+        boolean rowEquals = this.row == that.row;
+        boolean colEquals = this.col == that.col;
+        if (!rowEquals || !colEquals) {
+            System.out.println("ChessPosition.equals: Mismatch detected:");
+            System.out.println("  This position: " + this);
+            System.out.println("  That position: " + that);
+            System.out.println("  rowEquals: " + rowEquals + ", colEquals: " + colEquals);
+        }
+        return rowEquals && colEquals;
     }
 
     @Override
@@ -63,5 +72,10 @@ public class ChessPosition {
             return null;
         }
         return new ChessPosition(row, col);
+    }
+
+    @Override
+    public String toString() {
+        return "ChessPosition{" + "row=" + row + ", col=" + col + '}';
     }
 }
