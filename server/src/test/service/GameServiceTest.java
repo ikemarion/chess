@@ -42,7 +42,7 @@ public class GameServiceTest {
         // Confirm in gameDAO
         var storedGame = gameDAO.getGame(gameID);
         assertNotNull(storedGame, "Game should be stored.");
-        assertEquals("TestGame", storedGame.gameName(), "Game name should match.");
+        assertEquals("TestGame", storedGame.getGameName(), "Game name should match.");
     }
 
     /**
@@ -92,7 +92,7 @@ public class GameServiceTest {
         gameService.joinGame("joinToken", "WHITE", 1);
 
         var updated = gameDAO.getGame(1);
-        assertEquals("joiner", updated.whiteUsername(), "joiner should occupy WHITE");
+        assertEquals("joiner", updated.getWhiteUsername(), "joiner should occupy WHITE");
     }
 
     /**

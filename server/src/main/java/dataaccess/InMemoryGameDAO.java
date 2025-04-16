@@ -10,7 +10,7 @@ public class InMemoryGameDAO implements GameDAO {
     @Override
     public int createGame(GameData game) {
         int gameID = nextGameID++;
-        GameData newGame = new GameData(gameID, game.whiteUsername(), game.blackUsername(), game.gameName(), game.game());
+        GameData newGame = new GameData(gameID);
         games.put(gameID, newGame);
         return gameID;
     }
@@ -30,10 +30,10 @@ public class InMemoryGameDAO implements GameDAO {
 
     @Override
     public void updateGame(GameData game) throws DataAccessException {
-        if (!games.containsKey(game.gameID())) {
+        if (!games.containsKey(game.getGameID())) {
             throw new DataAccessException("Game not found");
         }
-        games.put(game.gameID(), game);
+        games.put(game.getGameID(), game);
     }
 
     @Override

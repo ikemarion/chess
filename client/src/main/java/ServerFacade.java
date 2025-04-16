@@ -191,7 +191,7 @@ public class ServerFacade {
     public GameData getGame(String authToken, int gameID) throws Exception {
         List<GameData> games = listGames(authToken);
         for (GameData g : games) {
-            if (g.gameID() == gameID) {
+            if (g.getGameID() == gameID) {
                 return g;
             }
         }

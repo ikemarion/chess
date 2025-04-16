@@ -31,7 +31,7 @@ public class MySQLGameDAOTest {
         assertTrue(newID > 0, "Should return an auto-generated gameID > 0.");
         GameData fetched = gameDAO.getGame(newID);
         assertNotNull(fetched, "GameData should be retrievable.");
-        assertEquals("TestGame", fetched.gameName());
+        assertEquals("TestGame", fetched.getGameName());
     }
 
     /**
@@ -55,8 +55,8 @@ public class MySQLGameDAOTest {
         GameData fetched = gameDAO.getGame(createdID);
 
         assertNotNull(fetched, "Should retrieve the newly inserted game.");
-        assertEquals("CoolGame", fetched.gameName());
-        assertEquals("wPlayer", fetched.whiteUsername());
+        assertEquals("CoolGame", fetched.getGameName());
+        assertEquals("wPlayer", fetched.getWhiteUsername());
     }
 
     @Test
@@ -84,7 +84,7 @@ public class MySQLGameDAOTest {
 
         gameDAO.updateGame(updatedGame);
         GameData fetched = gameDAO.getGame(gameId);
-        assertEquals("Renamed", fetched.gameName(), "Game name should be updated in DB.");
+        assertEquals("Renamed", fetched.getGameName(), "Game name should be updated in DB.");
     }
 
     @Test

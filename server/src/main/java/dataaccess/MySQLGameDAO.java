@@ -21,11 +21,11 @@ public class MySQLGameDAO implements GameDAO {
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
-            stmt.setString(1, game.whiteUsername());
-            stmt.setString(2, game.blackUsername());
-            stmt.setString(3, game.gameName());
+            stmt.setString(1, game.getWhiteUsername());
+            stmt.setString(2, game.getBlackUsername());
+            stmt.setString(3, game.getGameName());
 
-            String gameJson = gson.toJson(game.game());
+            String gameJson = gson.toJson(game.getChessGame());
             stmt.setString(4, gameJson);
 
             stmt.executeUpdate();
@@ -112,18 +112,18 @@ public class MySQLGameDAO implements GameDAO {
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setString(1, game.whiteUsername());
-            stmt.setString(2, game.blackUsername());
-            stmt.setString(3, game.gameName());
+            stmt.setString(1, game.getWhiteUsername());
+            stmt.setString(2, game.getBlackUsername());
+            stmt.setString(3, game.getGameName());
 
-            String gameJson = gson.toJson(game.game());
+            String gameJson = gson.toJson(game.getChessGame());
             stmt.setString(4, gameJson);
 
-            stmt.setInt(5, game.gameID());
+            stmt.setInt(5, game.getGameID());
 
             int rows = stmt.executeUpdate();
             if (rows == 0) {
-                throw new DataAccessException("No game with ID " + game.gameID() + " found to update.");
+                throw new DataAccessException("No game with ID " + game.getGameID() + " found to update.");
             }
         } catch (SQLException e) {
             throw new DataAccessException("Error updating game: " + e.getMessage());
